@@ -6,6 +6,7 @@ require 'minitest/autorun'
 require 'open3'
 require 'fileutils'
 require 'tmpdir'
+require 'timeout'
 
 class InstallerTest < Minitest::Test
   ROOT = File.expand_path('../..', __dir__)
@@ -51,6 +52,116 @@ class InstallerTest < Minitest::Test
 
     assert_equal original_manifest, File.binread(host_manifest)
     assert_equal '{"sentinel":true}', File.read(data)
+  end
+
+  def test_failed_manifest_write_restores_previous_code_and_manifest_exactly
+    assert run_script(INSTALLER, '--extension-path', @extension).last.success?
+    File.binwrite(installed_host, "old host\x00\xff".b)
+    File.chmod(0o700, installed_host)
+    old_manifest = "old manifest\x00\xff".b
+    File.binwrite(host_manifest, old_manifest)
+    File.chmod(0o640, host_manifest)
+    rules = File.join(data_dir, 'rules.json')
+    File.write(rules, '{"sentinel":true}')
+
+    refute run_failing_manifest_install.success?
+
+    assert_equal "old host\x00\xff".b, File.binread(installed_host)
+    assert_equal 0o700, File.stat(installed_host).mode & 0o777
+    assert_equal old_manifest, File.binread(host_manifest)
+    assert_equal 0o640, File.stat(host_manifest).mode & 0o777
+    assert_equal '{"sentinel":true}', File.read(rules)
+  end
+
+  def test_failed_first_install_removes_new_code_and_manifest
+    refute run_failing_manifest_install.success?
+
+    refute File.exist?(native_dir)
+    refute File.exist?(host_manifest)
+  end
+
+  def test_failure_after_manifest_replacement_restores_previous_bytes_and_mode
+    assert run_script(INSTALLER, '--extension-path', @extension).last.success?
+    old_manifest = File.binread(host_manifest)
+    File.chmod(0o640, host_manifest)
+    script = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      module TabOutNativeHostInstall
+        class << self
+          alias_method :original_atomic_write, :atomic_write
+          def atomic_write(path, content)
+            original_atomic_write(path, content)
+            raise IOError, 'injected failure after manifest replacement'
+          end
+        end
+      end
+      TabOutNativeHostInstall.install(ARGV.fetch(0))
+    RUBY
+
+    refute Open3.capture3({ 'HOME' => @home }, RbConfig.ruby, '-e', script, @extension).last.success?
+    assert_equal old_manifest, File.binread(host_manifest)
+    assert_equal 0o640, File.stat(host_manifest).mode & 0o777
+  end
+
+  def test_failed_backup_rename_never_deletes_existing_code
+    assert run_script(INSTALLER, '--extension-path', @extension).last.success?
+    File.binwrite(installed_host, 'old host')
+    script = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      class << File
+        alias_method :original_rename, :rename
+        def rename(source, target)
+          raise IOError, 'injected backup rename failure' if source == TabOutNativeHostInstall.native_dir
+          original_rename(source, target)
+        end
+      end
+      TabOutNativeHostInstall.install(ARGV.fetch(0))
+    RUBY
+
+    refute Open3.capture3({ 'HOME' => @home }, RbConfig.ruby, '-e', script, @extension).last.success?
+    assert_equal 'old host', File.binread(installed_host)
+  end
+
+  def test_concurrent_installs_are_serialized_and_last_id_wins
+    other_extension = File.join(@tmp, 'other-extension')
+    FileUtils.cp_r(@extension, other_extension)
+    marker = File.join(@tmp, 'first-at-manifest')
+    first_script = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      module TabOutNativeHostInstall
+        class << self
+          alias_method :original_atomic_write, :atomic_write
+          def atomic_write(path, content)
+            File.write(ENV.fetch('PAUSE_MARKER'), 'ready')
+            sleep 1.5
+            original_atomic_write(path, content)
+          end
+        end
+      end
+      TabOutNativeHostInstall.install(ARGV.fetch(0))
+    RUBY
+    first = Process.spawn({ 'HOME' => @home, 'PAUSE_MARKER' => marker }, RbConfig.ruby, '-e', first_script, @extension, out: File::NULL, err: File::NULL)
+    second = nil
+    begin
+      Timeout.timeout(5) { sleep 0.02 until File.exist?(marker) }
+      second = Process.spawn({ 'HOME' => @home }, RbConfig.ruby, INSTALLER, '--extension-path', other_extension, out: File::NULL, err: File::NULL)
+      sleep 0.2
+      assert_nil Process.waitpid(second, Process::WNOHANG), 'second install completed while first held the transaction'
+      Process.waitpid(first)
+      assert_equal 0, $?.exitstatus
+      Process.waitpid(second)
+      assert_equal 0, $?.exitstatus
+      second = nil
+    ensure
+      [first, second].compact.each do |pid|
+        Process.kill('TERM', pid) rescue nil
+        Process.waitpid(pid) rescue nil
+      end
+    end
+
+    expected_id = Digest::SHA256.hexdigest(File.expand_path(other_extension))[0, 32].tr('0123456789abcdef', 'abcdefghijklmnop')
+    assert_equal ["chrome-extension://#{expected_id}/"], JSON.parse(File.read(host_manifest)).fetch('allowed_origins')
+    assert File.executable?(installed_host)
   end
 
   def test_install_uses_supplied_absolute_path_for_id_even_when_symlinked
@@ -103,6 +214,19 @@ class InstallerTest < Minitest::Test
   end
 
   private
+
+  def run_failing_manifest_install
+    script = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      module TabOutNativeHostInstall
+        def self.atomic_write(_path, _content)
+          raise IOError, 'injected manifest write failure'
+        end
+      end
+      TabOutNativeHostInstall.install(ARGV.fetch(0))
+    RUBY
+    Open3.capture3({ 'HOME' => @home }, RbConfig.ruby, '-e', script, @extension).last
+  end
 
   def write_extension(name: 'Tab Out', permissions: ['tabs', 'nativeMessaging'])
     File.write(File.join(@extension, 'manifest.json'), JSON.generate({

@@ -1,0 +1,214 @@
+'use strict';
+
+const TabOutProxyRouting = (() => {
+  const HOST = 'com.samuel.tabout.proxy';
+  const VERSION = 1;
+  const TYPES = { suffix: 'DOMAIN-SUFFIX', keyword: 'DOMAIN-KEYWORD', exact: 'DOMAIN' };
+  const LABELS = { suffix: 'Suffix', keyword: 'Contains', exact: 'Exact' };
+  const COMMANDS = new Set(['status', 'list', 'add', 'remove']);
+
+  function proxyError(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
+  }
+
+  function requestPayload(command, payload) {
+    if (!COMMANDS.has(command)) throw proxyError('unsupported_command', 'Unsupported command');
+    if (command === 'add') {
+      if (!payload || !Object.hasOwn(TYPES, payload.type) || typeof payload.value !== 'string') {
+        throw proxyError('invalid_request', 'Choose a match type and enter a domain or keyword.');
+      }
+      return { type: payload.type, value: payload.value };
+    }
+    if (command === 'remove') {
+      if (!payload || typeof payload.id !== 'string' || !payload.id) {
+        throw proxyError('invalid_request', 'Rule ID is missing.');
+      }
+      return { id: payload.id };
+    }
+    return {};
+  }
+
+  function sendRequest(chromeApi, command, payload = {}) {
+    let safePayload;
+    try { safePayload = requestPayload(command, payload); }
+    catch (error) { return Promise.reject(error); }
+    if (!chromeApi?.runtime?.sendNativeMessage) {
+      return Promise.reject(proxyError('helper_unavailable', 'Install the Tab Out native helper to manage Clash rules.'));
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        chromeApi.runtime.sendNativeMessage(
+          HOST,
+          { protocolVersion: VERSION, command, payload: safePayload },
+          response => {
+            const nativeError = chromeApi.runtime.lastError;
+            if (nativeError) {
+              reject(proxyError('helper_unavailable', `Install or reconnect the Tab Out native helper. ${nativeError.message || ''}`.trim()));
+              return;
+            }
+            if (!response || typeof response !== 'object') {
+              reject(proxyError('invalid_response', 'The native helper returned no valid response.'));
+              return;
+            }
+            if (response.protocolVersion !== VERSION) {
+              reject(proxyError('protocol_mismatch', 'Tab Out and its native helper use different protocol versions. Please update both.'));
+              return;
+            }
+            if (response.ok === false) {
+              reject(proxyError(response.error?.code || 'helper_error', response.error?.message || 'The native helper could not apply this rule.'));
+              return;
+            }
+            const data = response.data;
+            if (response.ok !== true || !data || !Array.isArray(data.rules) || !['active', 'pending', 'stored'].includes(data.status)) {
+              reject(proxyError('invalid_response', 'The native helper returned an unexpected response.'));
+              return;
+            }
+            resolve(data);
+          }
+        );
+      } catch (error) {
+        reject(proxyError('helper_unavailable', `Install or reconnect the Tab Out native helper. ${error.message || ''}`.trim()));
+      }
+    });
+  }
+
+  function quickAddHost(url) {
+    let parsed;
+    try { parsed = new URL(url); } catch { return null; }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
+    const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    if (!host.includes('.') || host.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
+    if (!host.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label))) return null;
+    if (['localhost', 'local', 'internal', 'invalid', 'test'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
+    if (['internal.example', 'corp.example'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
+    return host;
+  }
+
+  function isSuffixCovered(host, rules) {
+    const name = String(host || '').toLowerCase();
+    return Array.isArray(rules) && rules.some(rule => rule.type === 'suffix' &&
+      (name === rule.value || name.endsWith(`.${rule.value}`)));
+  }
+
+  function quickAddButton(host, rules) {
+    const eligible = quickAddHost(`https://${host}`);
+    if (!eligible) return '';
+    const covered = isSuffixCovered(eligible, rules);
+    return `<button type="button" class="proxy-quick-add${covered ? ' is-active' : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${covered ? 'disabled' : ''} title="${covered ? 'Already covered by a suffix rule' : 'Add domain suffix to proxy routing'}" aria-label="${covered ? 'Proxy already covers' : 'Add proxy for'} ${escapeHtml(eligible)}">${covered ? 'Proxy added' : '+ Add proxy'}</button>`;
+  }
+
+  function normalizedInput(type, value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (type === 'keyword') return raw;
+    try {
+      return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase().replace(/\.$/, '');
+    } catch { return raw; }
+  }
+
+  function rulePreview(type, value) {
+    return TYPES[type] && String(value || '').trim() ? `${TYPES[type]},${normalizedInput(type, value)}` : 'Choose a match and enter a value';
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char]);
+  }
+
+  function renderRuleRows(rules, status = 'error') {
+    if (!Array.isArray(rules) || rules.length === 0) return '<p class="proxy-empty">No proxy rules yet. Other sites stay direct.</p>';
+    const stateLabel = status === 'active' ? 'Applied' : status === 'pending' ? 'Waiting for Clash' : 'Unverified';
+    const stateClass = status === 'active' ? 'is-active' : status === 'pending' ? 'is-pending' : 'is-error';
+    return rules.map(rule => `<div class="proxy-rule">
+      <span class="proxy-rule-badge">${escapeHtml(LABELS[rule.type] || rule.type)}</span>
+      <span class="proxy-rule-value" title="${escapeHtml(rule.value)}">${escapeHtml(rule.value)}</span>
+      <code class="proxy-rule-code">${escapeHtml(TYPES[rule.type] || 'RULE')}</code>
+      <span class="proxy-rule-state ${stateClass}">${stateLabel}</span>
+      <button type="button" class="proxy-rule-remove" data-action="proxy-remove" data-proxy-id="${escapeHtml(rule.id)}" aria-label="Remove ${escapeHtml(rule.value)}">Remove</button>
+    </div>`).join('');
+  }
+
+  function statusText(data, error) {
+    if (error) {
+      if (error.code === 'helper_unavailable') return 'Helper not connected. Install the native helper to enable proxy routing.';
+      if (error.code === 'protocol_mismatch') return 'Helper version mismatch. Update the extension and native helper.';
+      if (error.code === 'unsupported_profile' || /(?:profile|proxy_group|override|active_config|unsafe)/.test(error.code || '')) {
+        return `Unsupported Clash profile: ${error.message || 'Select a profile with a PROXY group.'}`;
+      }
+      return error.message || 'Proxy routing could not be synchronized.';
+    }
+    if (data?.status === 'active') return 'Clash connected · rules active';
+    if (data?.status === 'pending') return 'Rules saved · waiting for Clash to start';
+    if (data?.status === 'stored') return 'Rules stored locally · sync not checked';
+    return 'Checking native helper…';
+  }
+
+  function createController(transport, clock = globalThis) {
+    let data = null;
+    let error = null;
+    let busy = false;
+    let undoRule = null;
+    let undoTimer = null;
+    let onChange = () => {};
+
+    function state() { return { data, error, busy, undo: undoRule }; }
+    function notify() { onChange(state()); }
+    function clearUndo() {
+      if (undoTimer !== null) clock.clearTimeout(undoTimer);
+      undoTimer = null;
+      undoRule = null;
+      notify();
+    }
+    async function execute(command, payload) {
+      busy = true;
+      error = null;
+      notify();
+      try {
+        const result = await transport(command, payload);
+        data = result;
+        return result;
+      } catch (failure) {
+        error = failure;
+        throw failure;
+      } finally {
+        busy = false;
+        notify();
+      }
+    }
+
+    return {
+      state,
+      subscribe(listener) { onChange = listener; notify(); },
+      load() { return execute('status', {}); },
+      list() { return execute('list', {}); },
+      add(type, value) { return execute('add', { type, value }); },
+      async remove(id) {
+        const rule = data?.rules?.find(item => item.id === id);
+        if (!rule) throw proxyError('missing_rule', 'Rule was not found. Refresh the list and try again.');
+        const result = await execute('remove', { id });
+        clearUndo();
+        undoRule = rule;
+        undoTimer = clock.setTimeout(() => {
+          undoRule = null;
+          undoTimer = null;
+          notify();
+        }, 5000);
+        notify();
+        return result;
+      },
+      async undo() {
+        if (!undoRule) throw proxyError('undo_expired', 'The undo period has expired.');
+        const rule = undoRule;
+        clearUndo();
+        return execute('add', { type: rule.type, value: rule.value });
+      },
+      dispose() { clearUndo(); onChange = () => {}; },
+    };
+  }
+
+  return { HOST, VERSION, sendRequest, quickAddHost, quickAddButton, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, escapeHtml, createController };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = TabOutProxyRouting;

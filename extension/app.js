@@ -25,6 +25,59 @@
 
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
+const proxyController = TabOutProxyRouting.createController(
+  (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
+);
+
+function refreshQuickAddButtons(rules) {
+  document.querySelectorAll('[data-action="proxy-quick-add"]').forEach(button => {
+    const covered = TabOutProxyRouting.isSuffixCovered(button.dataset.proxyDomain, rules);
+    button.disabled = covered;
+    button.classList.toggle('is-active', covered);
+    button.textContent = covered ? 'Proxy added' : '+ Add proxy';
+    button.title = covered ? 'Already covered by a suffix rule' : 'Add domain suffix to proxy routing';
+  });
+}
+
+function renderProxyRouting(state) {
+  const { data, error, busy, undo } = state;
+  const rules = data?.rules || [];
+  const status = document.getElementById('proxyStatus');
+  const dot = document.getElementById('proxyStatusDot');
+  const count = document.getElementById('proxyRuleCount');
+  const synced = document.getElementById('proxyLastSync');
+  const list = document.getElementById('proxyRuleList');
+  const undoBar = document.getElementById('proxyUndo');
+  status.textContent = TabOutProxyRouting.statusText(data, error);
+  dot.className = `proxy-status-dot ${error ? 'is-error' : data?.status === 'active' ? 'is-active' : 'is-pending'}`;
+  count.textContent = data ? `${rules.length} rule${rules.length !== 1 ? 's' : ''}` : '— rules';
+  const parsedSync = data?.syncedAt ? new Date(data.syncedAt) : null;
+  synced.textContent = `Last sync: ${parsedSync && !Number.isNaN(parsedSync.getTime()) ? parsedSync.toLocaleString() : '—'}`;
+  list.innerHTML = data ? TabOutProxyRouting.renderRuleRows(rules, error ? 'error' : data.status) : '<p class="proxy-empty">Connect the native helper to view rules.</p>';
+  undoBar.hidden = !undo;
+  document.getElementById('proxyAdd').disabled = busy;
+  document.querySelector('[data-action="proxy-retry"]').disabled = busy;
+  list.querySelectorAll('[data-action="proxy-remove"]').forEach(button => { button.disabled = busy; });
+  refreshQuickAddButtons(rules);
+}
+
+function updateProxyPreview() {
+  const type = document.getElementById('proxyMatchType').value;
+  const value = document.getElementById('proxyValue').value;
+  document.getElementById('proxyRulePreview').textContent = TabOutProxyRouting.rulePreview(type, value);
+  document.getElementById('proxyKeywordWarning').hidden = type !== 'keyword';
+  document.getElementById('proxyValue').placeholder = type === 'keyword' ? 'e.g. google' : 'example.com';
+}
+
+function proxyActionToast(data) {
+  if (data.status === 'active') showToast('Proxy routing updated in Clash');
+  else if (data.status === 'pending') showToast('Rule saved; waiting for Clash');
+  else showToast('Rule stored; sync not checked');
+}
+
+function proxyActionError(error) {
+  showToast(`Proxy routing: ${error.message || 'operation failed'}`);
+}
 
 /**
  * fetchOpenTabs()
@@ -873,6 +926,10 @@ function renderDomainCard(group) {
       </button>`;
   }
 
+  if (!isLanding && !group.label) {
+    actionsHtml += TabOutProxyRouting.quickAddButton(group.domain, proxyController.state().data?.rules || []);
+  }
+
   return `
     <div class="mission-card domain-card ${hasDupes ? 'has-amber-bar' : 'has-neutral-bar'}" data-domain-id="${stableId}">
       <div class="status-bar"></div>
@@ -1092,10 +1149,11 @@ async function renderHistorySection() {
   domainsEl.innerHTML = domains.map(d => {
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${d.hostname}&sz=16`;
     // NOTE: 使用 target="_top" 保持与项目其他链接一致
-    return `<a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
+    const quickAdd = TabOutProxyRouting.quickAddButton(d.hostname, proxyController.state().data?.rules || []);
+    return `<span class="history-domain-entry"><a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
       <img class="history-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">
       <span>${d.friendlyName}</span>
-    </a>`;
+    </a>${quickAdd}</span>`;
   }).join('');
 }
 
@@ -1296,6 +1354,35 @@ document.addEventListener('click', async (e) => {
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  if (action.startsWith('proxy-')) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (actionEl.disabled || proxyController.state().busy) return;
+    try {
+      if (action === 'proxy-retry') {
+        await proxyController.load();
+        return;
+      }
+      if (action === 'proxy-quick-add') {
+        const host = TabOutProxyRouting.quickAddHost(`https://${actionEl.dataset.proxyDomain || ''}`);
+        if (!host) return;
+        proxyActionToast(await proxyController.add('suffix', host));
+        return;
+      }
+      if (action === 'proxy-remove') {
+        proxyActionToast(await proxyController.remove(actionEl.dataset.proxyId));
+        return;
+      }
+      if (action === 'proxy-undo') {
+        proxyActionToast(await proxyController.undo());
+        return;
+      }
+    } catch (error) {
+      proxyActionError(error);
+    }
+    return;
+  }
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
@@ -1584,9 +1671,32 @@ document.addEventListener('input', async (e) => {
   }
 });
 
+document.getElementById('proxyForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (proxyController.state().busy) return;
+  const type = document.getElementById('proxyMatchType').value;
+  const input = document.getElementById('proxyValue');
+  const value = TabOutProxyRouting.normalizedInput(type, input.value);
+  if (!value) return;
+  try {
+    const data = await proxyController.add(type, value);
+    input.value = '';
+    updateProxyPreview();
+    proxyActionToast(data);
+  } catch (error) {
+    proxyActionError(error);
+  }
+});
+
+document.getElementById('proxyMatchType').addEventListener('change', updateProxyPreview);
+document.getElementById('proxyValue').addEventListener('input', updateProxyPreview);
+
 
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
 TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleTabDerivedRefresh);
+proxyController.subscribe(renderProxyRouting);
+updateProxyPreview();
+proxyController.load().catch(error => console.warn('[tab-out] Proxy routing status:', error));
 renderDashboard();

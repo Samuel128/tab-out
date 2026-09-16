@@ -51,6 +51,44 @@ test('native adapter reports protocol mismatch and helper errors', async () => {
     error => error.code === 'invalid_response');
 });
 
+test('first-run inactive status is accepted without treating the installed helper as unavailable', async () => {
+  const response = { ok: true, protocolVersion: 1, data: { status: 'inactive', rules: [], profile: null, syncedAt: null } };
+  const chromeApi = { runtime: { sendNativeMessage(_host, request, callback) {
+    assert.equal(request.command, 'status');
+    callback(response);
+  } } };
+  const data = await ProxyRouting.sendRequest(chromeApi, 'status');
+  assert.deepEqual(data, response.data);
+  assert.match(ProxyRouting.statusText(data), /helper installed/i);
+  assert.match(ProxyRouting.statusText(data), /not yet activated/i);
+  assert.match(ProxyRouting.statusText(data), /add.*rule/i);
+  assert.equal(ProxyRouting.statusDotClass(data, null), '');
+  assert.equal(ProxyRouting.manualAddDisabled({ data, busy: false }), false);
+});
+
+test('manual add explicitly transitions first-run routing from inactive to active', async () => {
+  const calls = [];
+  const rule = { id: 'abc', type: 'suffix', value: 'example.com' };
+  const chromeApi = { runtime: { sendNativeMessage(_host, request, callback) {
+    calls.push(request);
+    const data = request.command === 'status'
+      ? { status: 'inactive', rules: [], profile: null, syncedAt: null }
+      : { status: 'active', rules: [rule], profile: { profileId: 'profile', proxyGroup: 'PROXY' }, syncedAt: '2026-09-16T00:00:00Z' };
+    callback({ ok: true, protocolVersion: 1, data });
+  } } };
+  const controller = ProxyRouting.createController((command, payload) => ProxyRouting.sendRequest(chromeApi, command, payload));
+  await controller.load();
+  assert.equal(controller.state().data.status, 'inactive');
+  assert.equal(ProxyRouting.manualAddDisabled(controller.state()), false);
+  await ProxyRouting.submitManualRule('suffix', 'Example.com', (type, value) => controller.add(type, value));
+  assert.equal(controller.state().data.status, 'active');
+  assert.deepEqual(controller.state().data.rules, [rule]);
+  assert.deepEqual(calls.map(call => [call.command, call.payload]), [
+    ['status', {}],
+    ['add', { type: 'suffix', value: 'example.com' }],
+  ]);
+});
+
 test('quick add accepts only public HTTP(S) hostnames', () => {
   assert.equal(ProxyRouting.quickAddHost('https://Docs.Example.com/path'), 'docs.example.com');
   assert.equal(ProxyRouting.quickAddHost('http://localhost:3000'), null);

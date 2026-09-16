@@ -61,7 +61,7 @@ const TabOutProxyRouting = (() => {
               return;
             }
             const data = response.data;
-            if (response.ok !== true || !data || !Array.isArray(data.rules) || !['active', 'pending', 'stored'].includes(data.status)) {
+            if (response.ok !== true || !data || !Array.isArray(data.rules) || !['active', 'pending', 'stored', 'inactive'].includes(data.status)) {
               reject(proxyError('invalid_response', 'The native helper returned an unexpected response.'));
               return;
             }
@@ -214,7 +214,19 @@ const TabOutProxyRouting = (() => {
     if (data?.status === 'active') return 'Clash connected · rules active';
     if (data?.status === 'pending') return 'Rules saved · waiting for Clash to start';
     if (data?.status === 'stored') return 'Rules stored locally · sync not checked';
+    if (data?.status === 'inactive') return 'Helper installed · proxy routing not yet activated. Add a rule to activate.';
     return 'Checking native helper…';
+  }
+
+  function statusDotClass(data, error) {
+    if (error) return 'is-error';
+    if (data?.status === 'active') return 'is-active';
+    if (data?.status === 'pending' || data?.status === 'stored') return 'is-pending';
+    return '';
+  }
+
+  function manualAddDisabled(state) {
+    return !!state.busy;
   }
 
   function actionFeedback(data, error) {
@@ -304,7 +316,7 @@ const TabOutProxyRouting = (() => {
     };
   }
 
-  return { HOST, VERSION, sendRequest, quickAddHost, confirmedQuickAdd, createQuickAddDialog, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, submitManualRule, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
+  return { HOST, VERSION, sendRequest, quickAddHost, confirmedQuickAdd, createQuickAddDialog, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, submitManualRule, rulePreview, renderRuleRows, statusText, statusDotClass, manualAddDisabled, actionFeedback, escapeHtml, createController };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = TabOutProxyRouting;

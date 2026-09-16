@@ -52,13 +52,13 @@ function renderProxyRouting(state) {
   const list = document.getElementById('proxyRuleList');
   const undoBar = document.getElementById('proxyUndo');
   status.textContent = TabOutProxyRouting.statusText(data, error);
-  dot.className = `proxy-status-dot ${error ? 'is-error' : data?.status === 'active' ? 'is-active' : 'is-pending'}`;
+  dot.className = `proxy-status-dot ${TabOutProxyRouting.statusDotClass(data, error)}`;
   count.textContent = data ? `${rules.length} rule${rules.length !== 1 ? 's' : ''}` : '— rules';
   const parsedSync = data?.syncedAt ? new Date(data.syncedAt) : null;
   synced.textContent = `Last sync: ${parsedSync && !Number.isNaN(parsedSync.getTime()) ? parsedSync.toLocaleString() : '—'}`;
   list.innerHTML = data ? TabOutProxyRouting.renderRuleRows(rules, error ? 'error' : data.status) : '<p class="proxy-empty">Connect the native helper to view rules.</p>';
   undoBar.hidden = !undo;
-  document.getElementById('proxyAdd').disabled = busy;
+  document.getElementById('proxyAdd').disabled = TabOutProxyRouting.manualAddDisabled(state);
   document.querySelector('[data-action="proxy-retry"]').disabled = busy;
   list.querySelectorAll('[data-action="proxy-remove"]').forEach(button => { button.disabled = busy; });
   refreshQuickAddButtons(state);

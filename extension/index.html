@@ -26,6 +26,9 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
+    <label class="language-picker"><span data-i18n="Language">Language</span>
+      <select id="languageSelect" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
+    </label>
   </header>
 
   <!-- ================================================================
@@ -40,10 +43,10 @@
         </svg>
       </div>
       <div class="tab-cleanup-text">
-        You have <strong id="tabOutDupeCount"></strong> Tab Out tabs open. Keep just this one?
+        <span data-i18n="You have">You have</span> <strong id="tabOutDupeCount"></strong> <span data-i18n="Tab Out tabs open. Keep just this one?">Tab Out tabs open. Keep just this one?</span>
       </div>
     </div>
-    <button class="tab-cleanup-btn" data-action="close-tabout-dupes">Close extras</button>
+    <button class="tab-cleanup-btn" data-action="close-tabout-dupes" data-i18n="Close extras">Close extras</button>
   </div>
 
   <!-- ================================================================
@@ -55,25 +58,57 @@
   <div class="dashboard-columns" id="dashboardColumns">
 
     <!-- LEFT COLUMN: Open tabs -->
+    <div class="dashboard-main">
     <div class="active-section" id="openTabsSection" style="display:none">
       <div class="section-header">
-        <h2 id="openTabsSectionTitle">Right now</h2>
+        <h2 id="openTabsSectionTitle">Open tabs</h2>
+        <span class="open-tabs-heading-count" id="statTabs" aria-live="polite">—</span>
         <div class="section-line"></div>
         <div class="section-count" id="openTabsSectionCount"></div>
       </div>
       <div class="missions" id="openTabsMissions"></div>
-      <div class="open-tabs-total">
-        <div class="stat">
-          <div class="stat-num" id="statTabs">—</div>
-          <div class="stat-label">Open tabs</div>
-        </div>
-      </div>
     </div>
+
+    <section class="proxy-routing-section" id="proxyRoutingSection" aria-labelledby="proxyRoutingTitle">
+      <div class="section-header">
+        <h2 id="proxyRoutingTitle" data-i18n="Proxy routing">Proxy routing</h2>
+        <div class="section-line"></div>
+        <div class="section-count" id="proxyRuleCount">— rules</div>
+        <a class="proxy-architecture-link" href="architecture.html" target="_blank" rel="noopener" data-i18n="How routing works">How routing works</a>
+      </div>
+      <div class="proxy-routing-panel">
+        <div class="proxy-status-row">
+          <span class="proxy-status-dot" id="proxyStatusDot" aria-hidden="true"></span>
+          <span id="proxyStatus" role="status" aria-live="polite">Checking native helper…</span>
+          <button type="button" class="proxy-retry" data-action="proxy-retry" data-i18n="Retry">Retry</button>
+        </div>
+        <div class="proxy-last-sync" id="proxyLastSync">Last sync: —</div>
+        <form class="proxy-form" id="proxyForm">
+          <label class="proxy-field"><span data-i18n="Match">Match</span>
+            <select id="proxyMatchType" name="type">
+              <option value="suffix" data-i18n="Domain suffix">Domain suffix</option>
+              <option value="keyword" data-i18n="Domain contains">Domain contains</option>
+              <option value="exact" data-i18n="Exact domain">Exact domain</option>
+            </select>
+          </label>
+          <label class="proxy-field proxy-value-field"><span data-i18n="Domain or keyword">Domain or keyword</span>
+            <input id="proxyValue" name="value" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" autocapitalize="none" required>
+          </label>
+          <button type="submit" class="proxy-add" id="proxyAdd" data-i18n="Add rule">Add rule</button>
+        </form>
+        <p class="proxy-keyword-warning" id="proxyKeywordWarning" hidden data-i18n="Contains matching is broad and may match unrelated domains. Tab Out cannot automatically identify all company domains; check the target before adding.">Contains matching is broad and may match unrelated domains. Tab Out cannot automatically identify all company domains; check the target before adding.</p>
+        <div class="proxy-preview"><span data-i18n="Rule preview:">Rule preview:</span> <code id="proxyRulePreview">Choose a match and enter a value</code></div>
+        <div class="proxy-rules-heading"><span data-i18n="Routing list">Routing list</span> <span data-i18n="Automatic sync">Automatic sync</span></div>
+        <div class="proxy-rule-list" id="proxyRuleList"><p class="proxy-empty">Connect the native helper to view rules.</p></div>
+        <div class="proxy-undo" id="proxyUndo" hidden><span data-i18n="Rule removed.">Rule removed.</span><button type="button" data-action="proxy-undo" data-i18n="Undo (5s)">Undo (5s)</button></div>
+      </div>
+    </section>
+    </div><!-- end .dashboard-main -->
 
     <!-- RIGHT COLUMN: Saved for Later checklist -->
     <div class="deferred-column" id="deferredColumn" style="display:none">
       <div class="section-header">
-        <h2>Saved for later</h2>
+        <h2 data-i18n="Saved for later">Saved for later</h2>
         <div class="section-line"></div>
         <div class="section-count" id="deferredCount"></div>
       </div>
@@ -83,18 +118,18 @@
 
       <!-- Empty state — shown when no active deferred tabs -->
       <div class="deferred-empty" id="deferredEmpty" style="display:none">
-        Nothing saved. Living in the moment.
+        <span data-i18n="Nothing saved. Living in the moment.">Nothing saved. Living in the moment.</span>
       </div>
 
       <!-- Archive section — collapsed by default -->
       <div class="deferred-archive" id="deferredArchive" style="display:none">
         <button class="archive-toggle" id="archiveToggle">
           <svg class="archive-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-          Archive
+          <span data-i18n="Archive">Archive</span>
           <span class="archive-count" id="archiveCount"></span>
         </button>
         <div class="archive-body" id="archiveBody" style="display:none">
-          <input type="text" class="archive-search" id="archiveSearch" placeholder="Search archived tabs...">
+          <input type="text" class="archive-search" id="archiveSearch" placeholder="Search archived tabs..." data-i18n-placeholder="Search archived tabs...">
           <div class="archive-list" id="archiveList"></div>
         </div>
       </div>
@@ -109,58 +144,19 @@
        ================================================================ -->
   <div class="history-section" id="historySection" style="display:none">
     <div class="section-header">
-      <h2>Recently visited</h2>
+      <h2 data-i18n="Recently visited">Recently visited</h2>
       <div class="section-line"></div>
       <div class="section-count" id="historySectionCount"></div>
     </div>
     <div class="history-domains" id="historyDomains"></div>
   </div>
 
-  <section class="proxy-routing-section" id="proxyRoutingSection" aria-labelledby="proxyRoutingTitle">
-    <div class="section-header">
-      <h2 id="proxyRoutingTitle">Proxy routing</h2>
-      <div class="section-line"></div>
-      <div class="section-count" id="proxyRuleCount">— rules</div>
-    </div>
-    <div class="proxy-routing-panel">
-      <div class="proxy-status-row">
-        <span class="proxy-status-dot" id="proxyStatusDot" aria-hidden="true"></span>
-        <span id="proxyStatus" role="status" aria-live="polite">Checking native helper…</span>
-        <button type="button" class="proxy-retry" data-action="proxy-retry">Retry</button>
-      </div>
-      <div class="proxy-last-sync" id="proxyLastSync">Last sync: —</div>
-      <form class="proxy-form" id="proxyForm">
-        <label class="proxy-field">
-          <span>Match</span>
-          <select id="proxyMatchType" name="type">
-            <option value="suffix">Domain suffix</option>
-            <option value="keyword">Domain contains</option>
-            <option value="exact">Exact domain</option>
-          </select>
-        </label>
-        <label class="proxy-field proxy-value-field">
-          <span>Domain or keyword</span>
-          <input id="proxyValue" name="value" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" autocapitalize="none" required>
-        </label>
-        <button type="submit" class="proxy-add" id="proxyAdd">Add rule</button>
-      </form>
-      <p class="proxy-keyword-warning" id="proxyKeywordWarning" hidden>Contains matching is broad and may match unrelated domains. Tab Out cannot automatically identify all company domains; check the target before adding.</p>
-      <div class="proxy-preview">Rule preview: <code id="proxyRulePreview">Choose a match and enter a value</code></div>
-      <div class="proxy-rules-heading">Routing list <span>Automatic sync</span></div>
-      <div class="proxy-rule-list" id="proxyRuleList"><p class="proxy-empty">Connect the native helper to view rules.</p></div>
-      <div class="proxy-undo" id="proxyUndo" hidden>
-        <span>Rule removed.</span>
-        <button type="button" data-action="proxy-undo">Undo (5s)</button>
-      </div>
-    </div>
-  </section>
-
   <!-- ================================================================
        FOOTER — global stats + refresh control
        ================================================================ -->
   <footer>
     <div class="last-refresh">
-      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &middot; forked by Samuel</span>
+      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> <span data-i18n="by">by</span> <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &middot; <span data-i18n="forked by">forked by</span> Samuel</span>
     </div>
   </footer>
 
@@ -168,16 +164,16 @@
 
 <dialog class="proxy-confirm-dialog" id="proxyQuickAddDialog" aria-labelledby="proxyConfirmTitle" aria-describedby="proxyConfirmDescription">
   <div class="proxy-confirm-inner">
-    <div class="proxy-confirm-eyebrow">Before routing</div>
-    <h2 id="proxyConfirmTitle">Add to proxy?</h2>
-    <p id="proxyConfirmDescription">The domain <strong id="proxyConfirmDomain"></strong> will be sent through Clash. A public-looking name may still be a company site.</p>
+    <div class="proxy-confirm-eyebrow" data-i18n="Before routing">Before routing</div>
+    <h2 id="proxyConfirmTitle" data-i18n="Add to proxy?">Add to proxy?</h2>
+    <p id="proxyConfirmDescription"><span data-i18n="The domain">The domain</span> <strong id="proxyConfirmDomain"></strong> <span data-i18n="will be sent through Clash. A public-looking name may still be a company site.">will be sent through Clash. A public-looking name may still be a company site.</span></p>
     <label class="proxy-confirm-check">
       <input type="checkbox" id="proxyConfirmCheck">
-      <span>This is not a company/internal domain</span>
+      <span data-i18n="This is not a company/internal domain">This is not a company/internal domain</span>
     </label>
     <div class="proxy-confirm-actions">
-      <button type="button" id="proxyConfirmCancel">Cancel</button>
-      <button type="button" id="proxyConfirmSubmit" disabled>Confirm and add</button>
+      <button type="button" id="proxyConfirmCancel" data-i18n="Cancel">Cancel</button>
+      <button type="button" id="proxyConfirmSubmit" disabled data-i18n="Confirm and add">Confirm and add</button>
     </div>
   </div>
 </dialog>
@@ -200,6 +196,7 @@
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="tab-state.js"></script>
+<script src="i18n.js"></script>
 <script src="proxy-routing.js"></script>
 <script src="app.js"></script>
 </body>

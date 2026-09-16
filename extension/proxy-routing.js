@@ -1,6 +1,7 @@
 'use strict';
 
 const TabOutProxyRouting = (() => {
+  const tr = value => globalThis.TabOutI18n?.t(value) || value;
   const HOST = 'com.samuel.tabout.proxy';
   const VERSION = 1;
   const TYPES = { suffix: 'DOMAIN-SUFFIX', keyword: 'DOMAIN-KEYWORD', exact: 'DOMAIN' };
@@ -89,7 +90,7 @@ const TabOutProxyRouting = (() => {
   async function confirmedQuickAdd(host, confirm, add) {
     const eligible = quickAddHost(`https://${host}`);
     if (!eligible) return null;
-    const approved = await confirm(eligible, 'This is not a company/internal domain');
+    const approved = await confirm(eligible, tr('This is not a company/internal domain'));
     if (approved !== true) return null;
     return add(eligible);
   }
@@ -146,16 +147,16 @@ const TabOutProxyRouting = (() => {
       button.classList.toggle(modifier, presentation.modifier === modifier);
     }
     button.disabled = presentation.disabled;
-    button.textContent = presentation.label;
-    button.title = presentation.title;
-    button.setAttribute('aria-label', `${presentation.label} ${button.dataset.proxyDomain}`);
+    button.textContent = tr(presentation.label);
+    button.title = tr(presentation.title);
+    button.setAttribute('aria-label', `${tr(presentation.label)} ${button.dataset.proxyDomain}`);
   }
 
   function quickAddButton(host, state) {
     const eligible = quickAddHost(`https://${host}`);
     if (!eligible) return '';
     const presentation = quickAddPresentation(eligible, state);
-    return `<button type="button" class="proxy-quick-add${presentation.modifier ? ` ${presentation.modifier}` : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${presentation.disabled ? 'disabled' : ''} title="${escapeHtml(presentation.title)}" aria-label="${escapeHtml(presentation.label)} ${escapeHtml(eligible)}">${escapeHtml(presentation.label)}</button>`;
+    return `<button type="button" class="proxy-quick-add${presentation.modifier ? ` ${presentation.modifier}` : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${presentation.disabled ? 'disabled' : ''} title="${escapeHtml(tr(presentation.title))}" aria-label="${escapeHtml(tr(presentation.label))} ${escapeHtml(eligible)}">${escapeHtml(tr(presentation.label))}</button>`;
   }
 
   function normalizedInput(type, value) {
@@ -178,9 +179,9 @@ const TabOutProxyRouting = (() => {
   }
 
   function rulePreview(type, value) {
-    if (!TYPES[type] || !String(value || '').trim()) return 'Choose a match and enter a value';
+    if (!TYPES[type] || !String(value || '').trim()) return tr('Choose a match and enter a value');
     try { return `${TYPES[type]},${normalizedInput(type, value)}`; }
-    catch (error) { return error.message; }
+    catch (error) { return tr(error.message); }
   }
 
   function escapeHtml(value) {
@@ -190,32 +191,32 @@ const TabOutProxyRouting = (() => {
   }
 
   function renderRuleRows(rules, status = 'error') {
-    if (!Array.isArray(rules) || rules.length === 0) return '<p class="proxy-empty">No proxy rules yet. Other sites stay direct.</p>';
+    if (!Array.isArray(rules) || rules.length === 0) return `<p class="proxy-empty">${tr('No proxy rules yet. Other sites stay direct.')}</p>`;
     const stateLabel = status === 'active' ? 'Applied' : status === 'pending' ? 'Waiting for Clash' : 'Unverified';
     const stateClass = status === 'active' ? 'is-active' : status === 'pending' ? 'is-pending' : 'is-error';
     return rules.map(rule => `<div class="proxy-rule">
-      <span class="proxy-rule-badge">${escapeHtml(LABELS[rule.type] || rule.type)}</span>
+      <span class="proxy-rule-badge">${escapeHtml(tr(LABELS[rule.type] || rule.type))}</span>
       <span class="proxy-rule-value" title="${escapeHtml(rule.value)}">${escapeHtml(rule.value)}</span>
       <code class="proxy-rule-code">${escapeHtml(TYPES[rule.type] || 'RULE')}</code>
-      <span class="proxy-rule-state ${stateClass}">${stateLabel}</span>
-      <button type="button" class="proxy-rule-remove" data-action="proxy-remove" data-proxy-id="${escapeHtml(rule.id)}" aria-label="Remove ${escapeHtml(rule.value)}">Remove</button>
+      <span class="proxy-rule-state ${stateClass}">${tr(stateLabel)}</span>
+      <button type="button" class="proxy-rule-remove" data-action="proxy-remove" data-proxy-id="${escapeHtml(rule.id)}" aria-label="${tr('Remove')} ${escapeHtml(rule.value)}">${tr('Remove')}</button>
     </div>`).join('');
   }
 
   function statusText(data, error) {
     if (error) {
-      if (error.code === 'helper_unavailable') return 'Helper not connected. Install the native helper to enable proxy routing.';
-      if (error.code === 'protocol_mismatch') return 'Helper version mismatch. Update the extension and native helper.';
+      if (error.code === 'helper_unavailable') return tr('Helper not connected. Install the native helper to enable proxy routing.');
+      if (error.code === 'protocol_mismatch') return tr('Helper version mismatch. Update the extension and native helper.');
       if (error.code === 'unsupported_profile' || /(?:profile|proxy_group|override|active_config|unsafe)/.test(error.code || '')) {
-        return `Unsupported Clash profile: ${error.message || 'Select a profile with a PROXY group.'}`;
+        return `${tr('Unsupported Clash profile:')} ${tr(error.message || 'Select a profile with a PROXY group.')}`;
       }
-      return error.message || 'Proxy routing could not be synchronized.';
+      return tr(error.message || 'Proxy routing could not be synchronized.');
     }
-    if (data?.status === 'active') return 'Clash connected · rules active';
-    if (data?.status === 'pending') return 'Rules saved · waiting for Clash to start';
-    if (data?.status === 'stored') return 'Rules stored locally · sync not checked';
-    if (data?.status === 'inactive') return 'Helper installed · proxy routing not yet activated. Add a rule to activate.';
-    return 'Checking native helper…';
+    if (data?.status === 'active') return tr('Clash connected · rules active');
+    if (data?.status === 'pending') return tr('Rules saved · waiting for Clash to start');
+    if (data?.status === 'stored') return tr('Rules stored locally · sync not checked');
+    if (data?.status === 'inactive') return tr('Helper installed · proxy routing not yet activated. Add a rule to activate.');
+    return tr('Checking native helper…');
   }
 
   function statusDotClass(data, error) {
@@ -230,11 +231,13 @@ const TabOutProxyRouting = (() => {
   }
 
   function actionFeedback(data, error) {
-    if (error) return `Proxy routing failed: ${error.message || 'operation failed'}`;
-    if (data?.status === 'active') return 'Change applied in Clash';
-    if (data?.status === 'pending') return 'Rule saved; waiting for Clash';
-    if (data?.status === 'stored') return 'Rule stored; sync not checked';
-    return 'Proxy routing status unverified';
+    if (error) return globalThis.TabOutI18n?.getLanguage() === 'zh'
+      ? `${tr('Proxy routing')}：${tr(error.message || 'operation failed')}`
+      : `Proxy routing failed: ${error.message || 'operation failed'}`;
+    if (data?.status === 'active') return tr('Change applied in Clash');
+    if (data?.status === 'pending') return tr('Rule saved; waiting for Clash');
+    if (data?.status === 'stored') return tr('Rule stored; sync not checked');
+    return tr('Proxy routing status unverified');
   }
 
   function createController(transport, clock = globalThis) {

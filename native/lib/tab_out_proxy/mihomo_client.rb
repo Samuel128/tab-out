@@ -26,7 +26,10 @@ module TabOutProxy
     end
 
     def provider(name)
-      request('GET', "/providers/rules/#{provider_name(name)}")
+      selected = provider_name(name)
+      response = request('GET', '/providers/rules')
+      providers = response.is_a?(Hash) ? response['providers'] : nil
+      providers.is_a?(Hash) ? providers[selected] : nil
     end
 
     private

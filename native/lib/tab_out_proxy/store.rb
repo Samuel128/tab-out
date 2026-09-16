@@ -12,10 +12,10 @@ module TabOutProxy
 
     attr_reader :state_path, :provider_path
 
-    def initialize(root:)
+    def initialize(root:, provider_path: nil)
       @root = File.expand_path(root)
       @state_path = File.join(@root, 'state.json')
-      @provider_path = File.join(@root, 'need-proxy.yaml')
+      @provider_path = File.expand_path(provider_path || File.join(@root, 'need-proxy.yaml'))
       @lock_path = File.join(@root, '.lock')
       @transaction_lock_path = File.join(@root, '.transaction.lock')
     end

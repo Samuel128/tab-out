@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Routing architecture · Tab Out</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="architecture.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">T/</span><span>Tab Out</span></div>
+      <nav class="top-actions" aria-label="Page navigation">
+        <a class="back-link" href="index.html" data-i18n="Back to Tab Out">Back to Tab Out</a>
+        <label class="language-picker"><span data-i18n="Language">Language</span>
+          <select id="languageSelect" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
+        </label>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <p class="eyebrow" data-i18n="Architecture / 01">Architecture / 01</p>
+          <h1 id="pageTitle" data-i18n="Only selected domains use the proxy.">Only selected domains use the proxy.</h1>
+          <p class="hero-deck" data-i18n="Tab Out is the editor, not the proxy engine. A local helper turns your list into Clash rules; Clash makes the final routing decision.">Tab Out is the editor, not the proxy engine. A local helper turns your list into Clash rules; Clash makes the final routing decision.</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-route art-route-top"><span>need-proxy</span><strong>PROXY</strong></div>
+          <div class="art-node"></div>
+          <div class="art-route art-route-bottom"><span>other traffic</span><strong>DIRECT</strong></div>
+        </div>
+      </section>
+
+      <section class="content-section" aria-labelledby="controlTitle">
+        <div class="section-intro"><p class="eyebrow">01 / <span data-i18n="Control path">Control path</span></p><h2 id="controlTitle" data-i18n="From a click to a verified rule.">From a click to a verified rule.</h2></div>
+        <div class="flow-grid">
+          <article class="flow-card"><span class="step-number">01</span><h3 data-i18n="Browser extension">Browser extension</h3><p data-i18n="Add or remove a suffix, exact domain, or contains match. The page shows the returned sync status.">Add or remove a suffix, exact domain, or contains match. The page shows the returned sync status.</p></article>
+          <article class="flow-card"><span class="step-number">02</span><h3 data-i18n="Native Messaging">Native Messaging</h3><p data-i18n="Chrome sends a versioned request to the fixed Tab Out helper. The page does not edit Clash files directly.">Chrome sends a versioned request to the fixed Tab Out helper. The page does not edit Clash files directly.</p></article>
+          <article class="flow-card"><span class="step-number">03</span><h3 data-i18n="Local helper">Local helper</h3><p data-i18n="The Ruby helper validates the input, stores the list, writes a rule-provider file, and keeps backups for rollback.">The Ruby helper validates the input, stores the list, writes a rule-provider file, and keeps backups for rollback.</p></article>
+          <article class="flow-card"><span class="step-number">04</span><h3 data-i18n="Clash / Mihomo">Clash / Mihomo</h3><p data-i18n="The helper reloads the active Clash configuration, refreshes need-proxy, and checks that Clash loaded the expected rule count.">The helper reloads the active Clash configuration, refreshes need-proxy, and checks that Clash loaded the expected rule count.</p></article>
+        </div>
+      </section>
+
+      <section class="content-section handoff" aria-labelledby="handoffTitle">
+        <div class="section-intro"><p class="eyebrow">02 / <span data-i18n="File handoff">File handoff</span></p><h2 id="handoffTitle" data-i18n="How Clash reads your list.">How Clash reads your list.</h2></div>
+        <p class="handoff-intro" data-i18n="Clash never reads the Tab Out form directly. The local helper saves your input, generates a provider file, then tells Clash to reload and verify it.">Clash never reads the Tab Out form directly. The local helper saves your input, generates a provider file, then tells Clash to reload and verify it.</p>
+        <div class="handoff-grid">
+          <article class="handoff-card">
+            <span class="handoff-kicker">01 / Tab Out → Ruby</span>
+            <h3 data-i18n="Send and save">Send and save</h3>
+            <p data-i18n="The extension sends an add or remove request through chrome.runtime.sendNativeMessage. The helper validates it and saves the list locally.">The extension sends an add or remove request through chrome.runtime.sendNativeMessage. The helper validates it and saves the list locally.</p>
+            <code class="handoff-path">~/Library/Application Support/Tab Out Proxy/state.json</code>
+          </article>
+          <article class="handoff-card">
+            <span class="handoff-kicker">02 / Ruby → YAML</span>
+            <h3 data-i18n="Generate provider file">Generate provider file</h3>
+            <p data-i18n="The helper turns each match type into a Clash rule. This is an example, not your current live list.">The helper turns each match type into a Clash rule. This is an example, not your current live list.</p>
+            <code class="handoff-path">tab-out-need-proxy.yaml</code>
+            <pre><code>payload:
+  - DOMAIN-SUFFIX,chatgpt.com</code></pre>
+          </article>
+          <article class="handoff-card">
+            <span class="handoff-kicker">03 / YAML → Clash</span>
+            <h3 data-i18n="Register and use">Register and use</h3>
+            <p data-i18n="The active Clash configuration registers that local file as rule-providers.need-proxy, then sends matches to PROXY.">The active Clash configuration registers that local file as rule-providers.need-proxy, then sends matches to PROXY.</p>
+            <pre><code>rule-providers:
+  need-proxy:
+    type: file
+    behavior: classical
+    format: yaml
+    path: …/tab-out-need-proxy.yaml
+rules:
+  - RULE-SET,need-proxy,PROXY</code></pre>
+          </article>
+        </div>
+        <div class="handoff-confirm"><span class="confirm-mark" aria-hidden="true">✓</span><p data-i18n="After every change, the helper reloads the active Clash configuration, refreshes need-proxy, and compares the loaded rule count with the saved list. Only then does Tab Out show Applied; if Clash is unavailable, it shows Pending instead.">After every change, the helper reloads the active Clash configuration, refreshes need-proxy, and compares the loaded rule count with the saved list. Only then does Tab Out show Applied; if Clash is unavailable, it shows Pending instead.</p></div>
+      </section>
+
+      <section class="content-section decisions" aria-labelledby="decisionTitle">
+        <div class="section-intro"><p class="eyebrow">03 / <span data-i18n="Decision path">Decision path</span></p><h2 id="decisionTitle" data-i18n="First matching rule wins.">First matching rule wins.</h2></div>
+        <div class="decision-list">
+          <article class="decision-row"><span class="decision-index">01</span><div><h3 data-i18n="Company traffic stays direct">Company traffic stays direct</h3><p data-i18n="Protected process names and known company domains, including internal.example, are placed before the proxy list.">Protected process names and known company domains, including internal.example, are placed before the proxy list.</p></div><code>DOMAIN-SUFFIX,internal.example,DIRECT</code></article>
+          <article class="decision-row is-proxy"><span class="decision-index">02</span><div><h3 data-i18n="Your list goes to PROXY">Your list goes to PROXY</h3><p data-i18n="The need-proxy provider contains the domains you manage in Tab Out. Its match types become DOMAIN-SUFFIX, DOMAIN, or DOMAIN-KEYWORD rules.">The need-proxy provider contains the domains you manage in Tab Out. Its match types become DOMAIN-SUFFIX, DOMAIN, or DOMAIN-KEYWORD rules.</p></div><code>RULE-SET,need-proxy,PROXY</code></article>
+          <article class="decision-row"><span class="decision-index">03</span><div><h3 data-i18n="Everything else goes direct">Everything else goes direct</h3><p data-i18n="If no earlier rule matches, Clash uses DIRECT. Removing a domain from Tab Out does not block the site; it returns to direct routing.">If no earlier rule matches, Clash uses DIRECT. Removing a domain from Tab Out does not block the site; it returns to direct routing.</p></div><code>MATCH,DIRECT</code></article>
+        </div>
+      </section>
+
+      <section class="notes-grid" aria-label="Routing notes">
+        <article class="note-card"><span class="note-symbol" aria-hidden="true">↻</span><h2 data-i18n="What the status means">What the status means</h2><p data-i18n="Applied means Clash accepted and verified the rule-provider count. Pending means the list was saved but Clash was unavailable; retry when Clash is running.">Applied means Clash accepted and verified the rule-provider count. Pending means the list was saved but Clash was unavailable; retry when Clash is running.</p></article>
+        <article class="note-card"><span class="note-symbol" aria-hidden="true">↗</span><h2 data-i18n="Two kinds of direct">Two kinds of direct</h2><p data-i18n="With macOS system proxy enabled, a request may still enter local Clash first and then exit via DIRECT. Bypassing Clash entirely requires a separate PAC or system-proxy setup.">With macOS system proxy enabled, a request may still enter local Clash first and then exit via DIRECT. Bypassing Clash entirely requires a separate PAC or system-proxy setup.</p></article>
+      </section>
+
+      <aside class="boundary-note"><strong data-i18n="One important boundary">One important boundary</strong><p data-i18n="This page explains the architecture, not your live domain list. Use the routing panel on the main page to inspect the current list and sync status.">This page explains the architecture, not your live domain list. Use the routing panel on the main page to inspect the current list and sync status.</p></aside>
+    </main>
+
+    <footer><span>Tab Out / Routing architecture</span><a href="index.html" data-i18n="Back to Tab Out">Back to Tab Out</a></footer>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="architecture.js"></script>
+</body>
+</html>

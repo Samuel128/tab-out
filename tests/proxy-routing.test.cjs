@@ -329,12 +329,13 @@ test('controller keeps failed removal in the displayed list without offering und
   assert.equal(callback, undefined);
 });
 
-test('proxy routing controls are placed between history and footer and loaded before app', () => {
+test('proxy routing controls follow open tabs before history and load before app', () => {
   const html = fs.readFileSync(path.join(__dirname, '../extension/index.html'), 'utf8');
+  const openTabs = html.indexOf('id="openTabsSection"');
   const history = html.indexOf('id="historySection"');
   const proxy = html.indexOf('id="proxyRoutingSection"');
   const footer = html.indexOf('<footer>');
-  assert.ok(history >= 0 && history < proxy && proxy < footer);
+  assert.ok(openTabs >= 0 && openTabs < proxy && proxy < history && history < footer);
   for (const id of ['proxyStatus', 'proxyRuleCount', 'proxyLastSync', 'proxyMatchType', 'proxyValue', 'proxyAdd', 'proxyRuleList', 'proxyRulePreview', 'proxyKeywordWarning', 'proxyUndo']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }

@@ -86,11 +86,9 @@ test('createDebouncedTask coalesces rapid calls into one execution', async () =>
   assert.equal(calls, 1);
 });
 
-test('live refresh waits for sequential chip and card exit animations', () => {
-  const longestExitSequenceMs = 200 + 300;
-
-  assert.ok(OPEN_TABS_REFRESH_DELAY_MS > longestExitSequenceMs);
-  assert.ok(OPEN_TABS_REFRESH_DELAY_MS <= 600);
+test('live refresh coalesces tab events without leaving stale counts', () => {
+  assert.ok(OPEN_TABS_REFRESH_DELAY_MS > 0);
+  assert.ok(OPEN_TABS_REFRESH_DELAY_MS <= 100);
 });
 
 test('bindTabRefreshListeners always refreshes created and removed tabs', () => {

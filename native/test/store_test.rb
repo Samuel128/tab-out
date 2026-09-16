@@ -26,6 +26,22 @@ class StoreTest < Minitest::Test
     assert_equal [rule.id], @store.list.map(&:id)
   end
 
+  def test_provider_can_live_inside_clash_config_while_state_stays_private
+    config_directory = File.join(@directory, 'clash')
+    provider_path = File.join(config_directory, 'tab-out-need-proxy.yaml')
+    store = TabOutProxy::Store.new(root: File.join(@directory, 'state'), provider_path: provider_path)
+    snapshot = store.snapshot
+
+    store.add(type: 'suffix', value: 'chatgpt.com')
+
+    assert_equal provider_path, store.provider_path
+    assert_equal ['DOMAIN-SUFFIX,chatgpt.com'], safe_yaml(provider_path).fetch('payload')
+    assert_equal ['chatgpt.com'], store.list.map(&:value)
+    store.restore(snapshot)
+    refute File.exist?(provider_path)
+    refute store.initialized?
+  end
+
   def test_ensure_initialized_creates_an_empty_state_and_provider_once
     @store.ensure_initialized
     first_state = File.binread(@store.state_path)

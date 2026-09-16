@@ -5,8 +5,8 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.TabOutTabState = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createTabState() {
-  // A final chip can exit for 200ms before its empty card runs a 300ms exit.
-  const OPEN_TABS_REFRESH_DELAY_MS = 520;
+  // Coalesce bursts of Chrome tab events without holding stale counts on screen.
+  const OPEN_TABS_REFRESH_DELAY_MS = 80;
 
   function isRealTab(tab) {
     const url = tab && typeof tab.url === 'string' ? tab.url.trim() : '';

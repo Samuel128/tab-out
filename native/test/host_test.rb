@@ -3,6 +3,7 @@
 require_relative 'test_helper'
 require 'json'
 require 'stringio'
+require 'yaml'
 require 'tab_out_proxy/protocol'
 
 class HostTest < Minitest::Test
@@ -48,6 +49,26 @@ class HostTest < Minitest::Test
       assert_equal false, response.fetch('ok')
       assert_equal 'invalid_json', response.dig('error', 'code')
       assert_equal '', trailing
+    end
+  end
+
+  def test_host_writes_rule_provider_inside_clash_config_directory
+    with_temp_dir do |directory|
+      clash_directory = prepare_clash_directory(directory)
+      env = {
+        'TAB_OUT_PROXY_HOME' => File.join(directory, 'state'),
+        'TAB_OUT_CLASH_CONFIG_DIR' => clash_directory,
+        'TAB_OUT_MIHOMO_SOCKET' => File.join(directory, 'missing.sock')
+      }
+      request = { 'protocolVersion' => 1, 'command' => 'add', 'payload' => { 'type' => 'suffix', 'value' => 'chatgpt.com' } }
+
+      response, = decode_one_frame(run_host(env, framed(request)))
+
+      assert_equal true, response.fetch('ok')
+      assert_equal 'pending', response.dig('data', 'status')
+      provider = File.join(clash_directory, 'tab-out-need-proxy.yaml')
+      assert_equal ['DOMAIN-SUFFIX,chatgpt.com'], YAML.safe_load(File.read(provider)).fetch('payload')
+      refute File.exist?(File.join(directory, 'state', 'need-proxy.yaml'))
     end
   end
 

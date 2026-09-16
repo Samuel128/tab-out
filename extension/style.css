@@ -81,6 +81,24 @@ header {
   text-transform: uppercase;
 }
 
+.language-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.language-picker select {
+  border: 1px solid var(--warm-gray);
+  border-radius: 7px;
+  background: var(--card-bg);
+  color: var(--ink);
+  padding: 7px 10px;
+  font: inherit;
+}
+
 /* ---- Tab cleanup banner ---- */
 .tab-cleanup-banner {
   background: linear-gradient(135deg, rgba(200, 113, 58, 0.04), rgba(200, 113, 58, 0.09));
@@ -214,6 +232,22 @@ header {
   font-weight: 500;
   letter-spacing: 0.5px;
   white-space: nowrap;
+}
+
+.proxy-architecture-link {
+  flex: none;
+  color: var(--accent-amber);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 2px;
+}
+
+.proxy-architecture-link:hover,
+.proxy-architecture-link:focus-visible {
+  color: var(--ink);
 }
 
 /* ---- Mission Cards ---- */
@@ -608,33 +642,13 @@ footer {
   align-items: center;
 }
 
-.open-tabs-total {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--warm-gray);
-}
-
-.stat {
-  text-align: center;
-}
-
-.stat-num {
+.open-tabs-heading-count {
   font-family: 'Newsreader', serif;
-  font-size: 28px;
-  font-weight: 300;
+  font-size: 18px;
+  font-weight: 400;
   color: var(--ink);
   line-height: 1;
-  transition: all 0.3s;
-}
-
-.stat-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--muted);
-  margin-top: 4px;
+  font-style: normal;
 }
 
 .last-refresh {
@@ -899,7 +913,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 /* Open tabs column keeps the grid layout */
-.dashboard-columns .active-section {
+.dashboard-main {
   flex: 1;
   min-width: 600px;
 }
@@ -919,6 +933,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   .dashboard-columns {
     flex-direction: column;
   }
+  .dashboard-main { width: 100%; min-width: 0; }
   .deferred-column {
     width: 100%;
     position: static;
@@ -1606,6 +1621,8 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 @media (max-width: 620px) {
   .container { padding: 28px 18px 54px; }
+  header { flex-wrap: wrap; gap: 12px; }
+  .language-picker { margin-left: auto; }
   .proxy-routing-panel { padding: 18px; }
   .proxy-form { grid-template-columns: 1fr; }
   .proxy-add { width: 100%; }

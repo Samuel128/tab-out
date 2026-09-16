@@ -25,6 +25,8 @@
 
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
+const tr = TabOutI18n.t;
+const countText = TabOutI18n.count;
 const proxyController = TabOutProxyRouting.createController(
   (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
 );
@@ -53,10 +55,10 @@ function renderProxyRouting(state) {
   const undoBar = document.getElementById('proxyUndo');
   status.textContent = TabOutProxyRouting.statusText(data, error);
   dot.className = `proxy-status-dot ${TabOutProxyRouting.statusDotClass(data, error)}`;
-  count.textContent = data ? `${rules.length} rule${rules.length !== 1 ? 's' : ''}` : '— rules';
+  count.textContent = data ? countText(rules.length, 'rule') : (TabOutI18n.getLanguage() === 'zh' ? '— 条规则' : '— rules');
   const parsedSync = data?.syncedAt ? new Date(data.syncedAt) : null;
-  synced.textContent = `Last sync: ${parsedSync && !Number.isNaN(parsedSync.getTime()) ? parsedSync.toLocaleString() : '—'}`;
-  list.innerHTML = data ? TabOutProxyRouting.renderRuleRows(rules, error ? 'error' : data.status) : '<p class="proxy-empty">Connect the native helper to view rules.</p>';
+  synced.textContent = `${tr('Last sync:')} ${parsedSync && !Number.isNaN(parsedSync.getTime()) ? parsedSync.toLocaleString(TabOutI18n.getLanguage() === 'zh' ? 'zh-CN' : 'en-US') : '—'}`;
+  list.innerHTML = data ? TabOutProxyRouting.renderRuleRows(rules, error ? 'error' : data.status) : `<p class="proxy-empty">${tr('Connect the native helper to view rules.')}</p>`;
   undoBar.hidden = !undo;
   document.getElementById('proxyAdd').disabled = TabOutProxyRouting.manualAddDisabled(state);
   document.querySelector('[data-action="proxy-retry"]').disabled = busy;
@@ -69,7 +71,7 @@ function updateProxyPreview() {
   const value = document.getElementById('proxyValue').value;
   document.getElementById('proxyRulePreview').textContent = TabOutProxyRouting.rulePreview(type, value);
   document.getElementById('proxyKeywordWarning').hidden = type !== 'keyword';
-  document.getElementById('proxyValue').placeholder = type === 'keyword' ? 'e.g. google' : 'example.com';
+  document.getElementById('proxyValue').placeholder = type === 'keyword' ? tr('e.g. google') : 'example.com';
 }
 
 function proxyActionToast(data) {
@@ -512,13 +514,13 @@ function renderOpenTabsEmptyState() {
           <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
         </svg>
       </div>
-      <div class="empty-title">Inbox zero, but for tabs.</div>
-      <div class="empty-subtitle">You're free.</div>
+      <div class="empty-title">${tr('Inbox zero, but for tabs.')}</div>
+      <div class="empty-subtitle">${tr("You're free.")}</div>
     </div>
   `;
 
   const countEl = document.getElementById('openTabsSectionCount');
-  if (countEl) countEl.textContent = '0 domains';
+  if (countEl) countEl.textContent = countText(0, 'domain');
 }
 
 function checkAndShowEmptyState() {
@@ -543,11 +545,11 @@ function timeAgo(dateStr) {
   const diffHours = Math.floor((now - then) / 3600000);
   const diffDays  = Math.floor((now - then) / 86400000);
 
-  if (diffMins < 1)   return 'just now';
-  if (diffMins < 60)  return diffMins + ' min ago';
-  if (diffHours < 24) return diffHours + ' hr' + (diffHours !== 1 ? 's' : '') + ' ago';
-  if (diffDays === 1) return 'yesterday';
-  return diffDays + ' days ago';
+  if (diffMins < 1)   return tr('just now');
+  if (diffMins < 60)  return TabOutI18n.getLanguage() === 'zh' ? `${diffMins} 分钟前` : `${diffMins} min ago`;
+  if (diffHours < 24) return TabOutI18n.getLanguage() === 'zh' ? `${diffHours} 小时前` : `${diffHours} hr${diffHours !== 1 ? 's' : ''} ago`;
+  if (diffDays === 1) return tr('yesterday');
+  return TabOutI18n.getLanguage() === 'zh' ? `${diffDays} 天前` : `${diffDays} days ago`;
 }
 
 /**
@@ -555,16 +557,16 @@ function timeAgo(dateStr) {
  */
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return tr('Good morning');
+  if (hour < 17) return tr('Good afternoon');
+  return tr('Good evening');
 }
 
 /**
  * getDateDisplay() — "Friday, April 4, 2026"
  */
 function getDateDisplay() {
-  return new Date().toLocaleDateString('en-US', {
+  return new Date().toLocaleDateString(TabOutI18n.getLanguage() === 'zh' ? 'zh-CN' : 'en-US', {
     weekday: 'long',
     year:    'numeric',
     month:   'long',
@@ -736,7 +738,7 @@ function smartTitle(title, url) {
   }
 
   if ((hostname === 'www.youtube.com' || hostname === 'youtube.com') && pathname === '/watch') {
-    if (titleIsUrl) return 'YouTube Video';
+    if (titleIsUrl) return tr('YouTube Video');
   }
 
   if ((hostname === 'www.reddit.com' || hostname === 'reddit.com' || hostname === 'old.reddit.com') && pathname.includes('/comments/')) {
@@ -822,10 +824,10 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
+        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="${tr('Save for later')}">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
         </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
+        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="${tr('Close this tab')}">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
       </div>
@@ -835,7 +837,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
   return `
     <div class="page-chips-overflow" style="display:none">${hiddenChips}</div>
     <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
-      <span class="chip-text">+${hiddenTabs.length} more</span>
+      <span class="chip-text">${TabOutI18n.getLanguage() === 'zh' ? `还有 ${hiddenTabs.length} 个` : `+${hiddenTabs.length} more`}</span>
     </div>`;
 }
 
@@ -865,12 +867,12 @@ function renderDomainCard(group) {
 
   const tabBadge = `<span class="open-tabs-badge">
     ${ICONS.tabs}
-    ${tabCount} tab${tabCount !== 1 ? 's' : ''} open
+    ${TabOutI18n.getLanguage() === 'zh' ? `打开 ${countText(tabCount, 'tab')}` : `${countText(tabCount, 'tab')} open`}
   </span>`;
 
   const dupeBadge = hasDupes
     ? `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
-        ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
+        ${countText(totalExtras, 'duplicate')}
       </span>`
     : '';
 
@@ -903,10 +905,10 @@ function renderDomainCard(group) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
+        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="${tr('Save for later')}">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
         </button>
-        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
+        <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="${tr('Close this tab')}">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
       </div>
@@ -916,14 +918,14 @@ function renderDomainCard(group) {
   let actionsHtml = `
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
       ${ICONS.close}
-      Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
+      ${TabOutI18n.getLanguage() === 'zh' ? `关闭全部 ${countText(tabCount, 'tab')}` : `Close all ${countText(tabCount, 'tab')}`}
     </button>`;
 
   if (hasDupes) {
     const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
     actionsHtml += `
       <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
-        Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
+        ${TabOutI18n.getLanguage() === 'zh' ? `关闭 ${countText(totalExtras, 'duplicate')}` : `Close ${countText(totalExtras, 'duplicate')}`}
       </button>`;
   }
 
@@ -936,7 +938,7 @@ function renderDomainCard(group) {
       <div class="status-bar"></div>
       <div class="mission-content">
         <div class="mission-top">
-          <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
+          <span class="mission-name">${isLanding ? tr('Homepages') : (group.label || friendlyDomain(group.domain))}</span>
           ${tabBadge}
           ${dupeBadge}
         </div>
@@ -945,7 +947,7 @@ function renderDomainCard(group) {
       </div>
       <div class="mission-meta">
         <div class="mission-page-count">${tabCount}</div>
-        <div class="mission-page-label">tabs</div>
+        <div class="mission-page-label">${tr('tabs')}</div>
       </div>
     </div>`;
 }
@@ -986,7 +988,7 @@ async function renderDeferredColumn() {
 
     // Render active checklist items
     if (active.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
+      countEl.textContent = countText(active.length, 'item');
       list.innerHTML = active.map(item => renderDeferredItem(item)).join('');
       list.style.display = 'block';
       empty.style.display = 'none';
@@ -1035,7 +1037,7 @@ function renderDeferredItem(item) {
           <span>${ago}</span>
         </div>
       </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
+      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="${tr('Dismiss')}">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
@@ -1145,7 +1147,7 @@ async function renderHistorySection() {
   }
 
   section.style.display = 'block';
-  if (countEl) countEl.textContent = `${domains.length} domain${domains.length !== 1 ? 's' : ''}`;
+  if (countEl) countEl.textContent = countText(domains.length, 'domain');
 
   domainsEl.innerHTML = domains.map(d => {
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${d.hostname}&sz=16`;
@@ -1291,12 +1293,12 @@ async function renderOpenTabsSection({ fetchTabs = true } = {}) {
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
   if (domainGroups.length > 0 && openTabsSection) {
-    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = tr('Open tabs');
+    openTabsSectionCount.innerHTML = `${countText(domainGroups.length, 'domain')} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} ${TabOutI18n.getLanguage() === 'zh' ? `关闭全部 ${countText(realTabs.length, 'tab')}` : `Close all ${countText(realTabs.length, 'tab')}`}</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else if (openTabsSection && openTabsSection.style.display !== 'none') {
-    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = tr('Open tabs');
     renderOpenTabsEmptyState();
   }
 
@@ -1398,8 +1400,8 @@ document.addEventListener('click', async (e) => {
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
-    scheduleTabDerivedRefresh();
-    showToast('Closed extra Tab Out tabs');
+    await renderTabDerivedSections();
+    showToast(tr('Closed extra Tab Out tabs'));
     return;
   }
 
@@ -1431,34 +1433,13 @@ document.addEventListener('click', async (e) => {
     // Close the tab in Chrome directly
     const allTabs = await chrome.tabs.query({});
     const match   = allTabs.find(t => t.url === tabUrl);
-    if (match) await chrome.tabs.remove(match.id);
-    await fetchOpenTabs();
+    if (!match) return;
+    await chrome.tabs.remove(match.id);
 
     playCloseSound();
 
-    // Animate the chip row out
-    const chip = actionEl.closest('.page-chip');
-    if (chip) {
-      const rect = chip.getBoundingClientRect();
-      shootConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      chip.style.transition = 'opacity 0.2s, transform 0.2s';
-      chip.style.opacity    = '0';
-      chip.style.transform  = 'scale(0.8)';
-      setTimeout(() => {
-        chip.remove();
-        // If the card now has no tabs, remove it too
-        const parentCard = document.querySelector('.mission-card:has(.mission-pages:empty)');
-        if (parentCard) animateCardOut(parentCard);
-        document.querySelectorAll('.mission-card').forEach(c => {
-          if (c.querySelectorAll('.page-chip[data-action="focus-tab"]').length === 0) {
-            animateCardOut(c);
-          }
-        });
-      }, 200);
-    }
-
-    scheduleTabDerivedRefresh();
-    showToast('Tab closed');
+    await renderTabDerivedSections();
+    showToast(tr('Tab closed'));
     return;
   }
 
@@ -1474,7 +1455,7 @@ document.addEventListener('click', async (e) => {
       await saveTabForLater({ url: tabUrl, title: tabTitle });
     } catch (err) {
       console.error('[tab-out] Failed to save tab:', err);
-      showToast('Failed to save tab');
+      showToast(tr('Failed to save tab'));
       return;
     }
 
@@ -1482,19 +1463,8 @@ document.addEventListener('click', async (e) => {
     const allTabs = await chrome.tabs.query({});
     const match   = allTabs.find(t => t.url === tabUrl);
     if (match) await chrome.tabs.remove(match.id);
-    await fetchOpenTabs();
-
-    // Animate chip out
-    const chip = actionEl.closest('.page-chip');
-    if (chip) {
-      chip.style.transition = 'opacity 0.2s, transform 0.2s';
-      chip.style.opacity    = '0';
-      chip.style.transform  = 'scale(0.8)';
-      setTimeout(() => chip.remove(), 200);
-    }
-
-    scheduleTabDerivedRefresh();
-    showToast('Saved for later');
+    await renderTabDerivedSections();
+    showToast(tr('Saved for later'));
     await renderDeferredColumn();
     return;
   }
@@ -1558,19 +1528,11 @@ document.addEventListener('click', async (e) => {
       await closeTabsByUrls(urls);
     }
 
-    if (card) {
-      playCloseSound();
-      animateCardOut(card);
-    }
+    playCloseSound();
 
-    // Remove from in-memory groups
-    const idx = domainGroups.indexOf(group);
-    if (idx !== -1) domainGroups.splice(idx, 1);
-
-    const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
-    showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
-
-    scheduleTabDerivedRefresh();
+    const groupLabel = group.domain === '__landing-pages__' ? tr('Homepages') : (group.label || friendlyDomain(group.domain));
+    showToast(TabOutI18n.getLanguage() === 'zh' ? `已关闭 ${groupLabel} 的标签页` : `Closed ${countText(urls.length, 'tab')} from ${groupLabel}`);
+    await renderTabDerivedSections();
     return;
   }
 
@@ -1583,31 +1545,8 @@ document.addEventListener('click', async (e) => {
     await closeDuplicateTabs(urls, true);
     playCloseSound();
 
-    // Hide the dedup button
-    actionEl.style.transition = 'opacity 0.2s';
-    actionEl.style.opacity    = '0';
-    setTimeout(() => actionEl.remove(), 200);
-
-    // Remove dupe badges from the card
-    if (card) {
-      card.querySelectorAll('.chip-dupe-badge').forEach(b => {
-        b.style.transition = 'opacity 0.2s';
-        b.style.opacity    = '0';
-        setTimeout(() => b.remove(), 200);
-      });
-      card.querySelectorAll('.open-tabs-badge').forEach(badge => {
-        if (badge.textContent.includes('duplicate')) {
-          badge.style.transition = 'opacity 0.2s';
-          badge.style.opacity    = '0';
-          setTimeout(() => badge.remove(), 200);
-        }
-      });
-      card.classList.remove('has-amber-bar');
-      card.classList.add('has-neutral-bar');
-    }
-
-    scheduleTabDerivedRefresh();
-    showToast('Closed duplicates, kept one copy each');
+    await renderTabDerivedSections();
+    showToast(tr('Closed duplicates, kept one copy each'));
     return;
   }
 
@@ -1619,16 +1558,8 @@ document.addEventListener('click', async (e) => {
     await closeTabsByUrls(allUrls);
     playCloseSound();
 
-    document.querySelectorAll('#openTabsMissions .mission-card').forEach(c => {
-      shootConfetti(
-        c.getBoundingClientRect().left + c.offsetWidth / 2,
-        c.getBoundingClientRect().top  + c.offsetHeight / 2
-      );
-      animateCardOut(c);
-    });
-
-    scheduleTabDerivedRefresh();
-    showToast('All tabs closed. Fresh start.');
+    await renderTabDerivedSections();
+    showToast(tr('All tabs closed. Fresh start.'));
     return;
   }
 });
@@ -1669,7 +1600,7 @@ document.addEventListener('input', async (e) => {
     );
 
     archiveList.innerHTML = results.map(item => renderArchiveItem(item)).join('')
-      || '<div style="font-size:12px;color:var(--muted);padding:8px 0">No results</div>';
+      || `<div style="font-size:12px;color:var(--muted);padding:8px 0">${tr('No results')}</div>`;
   } catch (err) {
     console.warn('[tab-out] Archive search failed:', err);
   }
@@ -1689,7 +1620,7 @@ document.getElementById('proxyForm').addEventListener('submit', async event => {
     updateProxyPreview();
     proxyActionToast(data);
   } catch (error) {
-    if (error.code === 'invalid_keyword_input') showToast(error.message);
+    if (error.code === 'invalid_keyword_input') showToast(tr(error.message));
     else proxyActionError(error);
   }
 });
@@ -1703,6 +1634,24 @@ document.getElementById('proxyValue').addEventListener('input', updateProxyPrevi
    ---------------------------------------------------------------- */
 TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleTabDerivedRefresh);
 proxyController.subscribe(renderProxyRouting);
-updateProxyPreview();
 proxyController.load().catch(error => console.warn('[tab-out] Proxy routing status:', error));
-renderDashboard();
+async function setDashboardLanguage(value, persist = false) {
+  TabOutI18n.setLanguage(value);
+  document.getElementById('languageSelect').value = TabOutI18n.getLanguage();
+  TabOutI18n.apply();
+  updateProxyPreview();
+  renderProxyRouting(proxyController.state());
+  await renderDashboard();
+  if (persist) await chrome.storage.local.set({ language: TabOutI18n.getLanguage() });
+}
+
+document.getElementById('languageSelect').addEventListener('change', event => {
+  setDashboardLanguage(event.target.value, true).catch(error => console.warn('[tab-out] Language change failed:', error));
+});
+
+chrome.storage.local.get('language')
+  .then(({ language }) => setDashboardLanguage(language))
+  .catch(error => {
+    console.warn('[tab-out] Language preference unavailable:', error);
+    setDashboardLanguage('en');
+  });

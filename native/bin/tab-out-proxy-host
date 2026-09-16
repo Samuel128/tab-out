@@ -34,7 +34,10 @@ socket_path = File.expand_path(
   ENV.fetch('TAB_OUT_MIHOMO_SOCKET', '/tmp/verge/verge-mihomo.sock')
 )
 
-store = TabOutProxy::Store.new(root: data_home)
+store = TabOutProxy::Store.new(
+  root: data_home,
+  provider_path: File.join(clash_config_dir, 'tab-out-need-proxy.yaml')
+)
 profile_manager = TabOutProxy::ProfileManager.new(
   config_dir: clash_config_dir,
   provider_path: store.provider_path

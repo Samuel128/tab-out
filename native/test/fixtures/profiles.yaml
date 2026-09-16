@@ -1,0 +1,18 @@
+current: current-profile
+items:
+  - uid: current-profile
+    type: remote
+    name: Sanitized remote
+    file: remote-profile.json
+    url: https://redacted.invalid/subscription
+    option:
+      merge: merge-config
+      rules: rules-config
+  - uid: merge-config
+    type: merge
+    name: Existing merge
+    file: merge-override.yaml
+  - uid: rules-config
+    type: rules
+    name: Existing rules
+    file: rules-override.yaml

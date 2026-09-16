@@ -1,0 +1,7 @@
+{
+  "name": "com.samuel.tabout.proxy",
+  "description": "Tab Out local proxy rule manager",
+  "path": "{{HOST_PATH}}",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://{{EXTENSION_ID}}/"]
+}

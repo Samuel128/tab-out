@@ -25,6 +25,60 @@
 
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
+const proxyController = TabOutProxyRouting.createController(
+  (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
+);
+const confirmProxyQuickAdd = TabOutProxyRouting.createQuickAddDialog({
+  dialog: document.getElementById('proxyQuickAddDialog'),
+  domain: document.getElementById('proxyConfirmDomain'),
+  check: document.getElementById('proxyConfirmCheck'),
+  cancel: document.getElementById('proxyConfirmCancel'),
+  submit: document.getElementById('proxyConfirmSubmit'),
+});
+
+function refreshQuickAddButtons(state) {
+  document.querySelectorAll('[data-action="proxy-quick-add"]').forEach(button => {
+    TabOutProxyRouting.applyQuickAddButtonState(button, state);
+  });
+}
+
+function renderProxyRouting(state) {
+  const { data, error, busy, undo } = state;
+  const rules = data?.rules || [];
+  const status = document.getElementById('proxyStatus');
+  const dot = document.getElementById('proxyStatusDot');
+  const count = document.getElementById('proxyRuleCount');
+  const synced = document.getElementById('proxyLastSync');
+  const list = document.getElementById('proxyRuleList');
+  const undoBar = document.getElementById('proxyUndo');
+  status.textContent = TabOutProxyRouting.statusText(data, error);
+  dot.className = `proxy-status-dot ${TabOutProxyRouting.statusDotClass(data, error)}`;
+  count.textContent = data ? `${rules.length} rule${rules.length !== 1 ? 's' : ''}` : '— rules';
+  const parsedSync = data?.syncedAt ? new Date(data.syncedAt) : null;
+  synced.textContent = `Last sync: ${parsedSync && !Number.isNaN(parsedSync.getTime()) ? parsedSync.toLocaleString() : '—'}`;
+  list.innerHTML = data ? TabOutProxyRouting.renderRuleRows(rules, error ? 'error' : data.status) : '<p class="proxy-empty">Connect the native helper to view rules.</p>';
+  undoBar.hidden = !undo;
+  document.getElementById('proxyAdd').disabled = TabOutProxyRouting.manualAddDisabled(state);
+  document.querySelector('[data-action="proxy-retry"]').disabled = busy;
+  list.querySelectorAll('[data-action="proxy-remove"]').forEach(button => { button.disabled = busy; });
+  refreshQuickAddButtons(state);
+}
+
+function updateProxyPreview() {
+  const type = document.getElementById('proxyMatchType').value;
+  const value = document.getElementById('proxyValue').value;
+  document.getElementById('proxyRulePreview').textContent = TabOutProxyRouting.rulePreview(type, value);
+  document.getElementById('proxyKeywordWarning').hidden = type !== 'keyword';
+  document.getElementById('proxyValue').placeholder = type === 'keyword' ? 'e.g. google' : 'example.com';
+}
+
+function proxyActionToast(data) {
+  showToast(TabOutProxyRouting.actionFeedback(data));
+}
+
+function proxyActionError(error) {
+  showToast(TabOutProxyRouting.actionFeedback(null, error));
+}
 
 /**
  * fetchOpenTabs()
@@ -443,16 +497,13 @@ function showToast(message) {
 }
 
 /**
- * checkAndShowEmptyState()
+ * renderOpenTabsEmptyState()
  *
- * Shows a cheerful "Inbox zero" message when all domain cards are gone.
+ * Shows the established "Inbox zero" state after the final card disappears.
  */
-function checkAndShowEmptyState() {
+function renderOpenTabsEmptyState() {
   const missionsEl = document.getElementById('openTabsMissions');
   if (!missionsEl) return;
-
-  const remaining = missionsEl.querySelectorAll('.mission-card:not(.closing)').length;
-  if (remaining > 0) return;
 
   missionsEl.innerHTML = `
     <div class="missions-empty-state">
@@ -468,6 +519,14 @@ function checkAndShowEmptyState() {
 
   const countEl = document.getElementById('openTabsSectionCount');
   if (countEl) countEl.textContent = '0 domains';
+}
+
+function checkAndShowEmptyState() {
+  const missionsEl = document.getElementById('openTabsMissions');
+  if (!missionsEl) return;
+
+  const remaining = missionsEl.querySelectorAll('.mission-card:not(.closing)').length;
+  if (remaining === 0) renderOpenTabsEmptyState();
 }
 
 /**
@@ -720,16 +779,7 @@ let domainGroups = [];
  * pages, about:blank, etc.
  */
 function getRealTabs() {
-  return openTabs.filter(t => {
-    const url = t.url || '';
-    return (
-      !url.startsWith('chrome://') &&
-      !url.startsWith('chrome-extension://') &&
-      !url.startsWith('about:') &&
-      !url.startsWith('edge://') &&
-      !url.startsWith('brave://')
-    );
-  });
+  return TabOutTabState.getRealTabs(openTabs);
 }
 
 /**
@@ -801,17 +851,17 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
  * group = { domain: string, tabs: [{ url, title, id, windowId, active }] }
  */
 function renderDomainCard(group) {
-  const tabs      = group.tabs || [];
-  const tabCount  = tabs.length;
+  const tabs = group.tabs || [];
+  const {
+    tabCount,
+    duplicateExtras: totalExtras,
+    urlCounts,
+  } = TabOutTabState.getGroupStats(tabs);
   const isLanding = group.domain === '__landing-pages__';
   const stableId  = 'domain-' + group.domain.replace(/[^a-z0-9]/g, '-');
 
-  // Count duplicates (exact URL match)
-  const urlCounts = {};
-  for (const tab of tabs) urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
   const dupeUrls   = Object.entries(urlCounts).filter(([, c]) => c > 1);
-  const hasDupes   = dupeUrls.length > 0;
-  const totalExtras = dupeUrls.reduce((s, [, c]) => s + c - 1, 0);
+  const hasDupes   = totalExtras > 0;
 
   const tabBadge = `<span class="open-tabs-badge">
     ${ICONS.tabs}
@@ -875,6 +925,10 @@ function renderDomainCard(group) {
       <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
         Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
       </button>`;
+  }
+
+  if (!isLanding && !group.label) {
+    actionsHtml += TabOutProxyRouting.quickAddButton(group.domain, proxyController.state());
   }
 
   return `
@@ -1096,10 +1150,11 @@ async function renderHistorySection() {
   domainsEl.innerHTML = domains.map(d => {
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${d.hostname}&sz=16`;
     // NOTE: 使用 target="_top" 保持与项目其他链接一致
-    return `<a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
+    const quickAdd = TabOutProxyRouting.quickAddButton(d.hostname, proxyController.state());
+    return `<span class="history-domain-entry"><a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
       <img class="history-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">
       <span>${d.friendlyName}</span>
-    </a>`;
+    </a>${quickAdd}</span>`;
   }).join('');
 }
 
@@ -1109,25 +1164,12 @@ async function renderHistorySection() {
    ---------------------------------------------------------------- */
 
 /**
- * renderStaticDashboard()
+ * renderOpenTabsSection()
  *
- * The main render function:
- * 1. Paints greeting + date
- * 2. Fetches open tabs via chrome.tabs.query()
- * 3. Groups tabs by domain (with landing pages pulled out to their own group)
- * 4. Renders domain cards
- * 5. Updates footer stats
- * 6. Renders the "Saved for Later" checklist
+ * Fetches and renders the open-tab cards and their derived totals.
  */
-async function renderStaticDashboard() {
-  // --- Header ---
-  const greetingEl = document.getElementById('greeting');
-  const dateEl     = document.getElementById('dateDisplay');
-  if (greetingEl) greetingEl.textContent = getGreeting();
-  if (dateEl)     dateEl.textContent     = getDateDisplay();
-
-  // --- Fetch tabs ---
-  await fetchOpenTabs();
+async function renderOpenTabsSection({ fetchTabs = true } = {}) {
+  if (fetchTabs) await fetchOpenTabs();
   const realTabs = getRealTabs();
 
   // --- Group tabs by domain ---
@@ -1253,27 +1295,50 @@ async function renderStaticDashboard() {
     openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
-  } else if (openTabsSection) {
-    openTabsSection.style.display = 'none';
+  } else if (openTabsSection && openTabsSection.style.display !== 'none') {
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
+    renderOpenTabsEmptyState();
   }
 
   // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
-  if (statTabs) statTabs.textContent = openTabs.length;
+  if (statTabs) statTabs.textContent = realTabs.length;
 
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
+}
 
-  // --- 渲染『已保存』列 ---
+/**
+ * renderStaticDashboard()
+ *
+ * Paints the full dashboard on initial load. Later Chrome tab events refresh
+ * open tabs and history together without rebuilding saved items.
+ */
+async function renderStaticDashboard() {
+  const greetingEl = document.getElementById('greeting');
+  const dateEl = document.getElementById('dateDisplay');
+  if (greetingEl) greetingEl.textContent = getGreeting();
+  if (dateEl) dateEl.textContent = getDateDisplay();
+
+  await renderOpenTabsSection();
   await renderDeferredColumn();
-
-  // --- 渲染底部『曾经访问』历史域名区块 ---
   await renderHistorySection();
 }
 
 async function renderDashboard() {
   await renderStaticDashboard();
 }
+
+async function renderTabDerivedSections() {
+  await renderOpenTabsSection();
+  await renderHistorySection();
+}
+
+const scheduleTabDerivedRefresh = TabOutTabState.createDebouncedTask(() => {
+  renderTabDerivedSections().catch(error => {
+    console.warn('[tab-out] Failed to refresh tab-derived sections:', error);
+  });
+}, TabOutTabState.OPEN_TABS_REFRESH_DELAY_MS);
 
 
 /* ----------------------------------------------------------------
@@ -1291,6 +1356,38 @@ document.addEventListener('click', async (e) => {
 
   const action = actionEl.dataset.action;
 
+  if (action.startsWith('proxy-')) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (actionEl.disabled || proxyController.state().busy) return;
+    try {
+      if (action === 'proxy-retry') {
+        await proxyController.load();
+        return;
+      }
+      if (action === 'proxy-quick-add') {
+        const data = await TabOutProxyRouting.confirmedQuickAdd(
+          actionEl.dataset.proxyDomain || '',
+          confirmProxyQuickAdd,
+          host => proxyController.add('suffix', host)
+        );
+        if (data) proxyActionToast(data);
+        return;
+      }
+      if (action === 'proxy-remove') {
+        proxyActionToast(await proxyController.remove(actionEl.dataset.proxyId));
+        return;
+      }
+      if (action === 'proxy-undo') {
+        proxyActionToast(await proxyController.undo());
+        return;
+      }
+    } catch (error) {
+      proxyActionError(error);
+    }
+    return;
+  }
+
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
     await closeTabOutDupes();
@@ -1301,6 +1398,7 @@ document.addEventListener('click', async (e) => {
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
+    scheduleTabDerivedRefresh();
     showToast('Closed extra Tab Out tabs');
     return;
   }
@@ -1359,10 +1457,7 @@ document.addEventListener('click', async (e) => {
       }, 200);
     }
 
-    // Update footer
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
-
+    scheduleTabDerivedRefresh();
     showToast('Tab closed');
     return;
   }
@@ -1398,6 +1493,7 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => chip.remove(), 200);
     }
 
+    scheduleTabDerivedRefresh();
     showToast('Saved for later');
     await renderDeferredColumn();
     return;
@@ -1474,8 +1570,7 @@ document.addEventListener('click', async (e) => {
     const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
     showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
 
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
+    scheduleTabDerivedRefresh();
     return;
   }
 
@@ -1511,6 +1606,7 @@ document.addEventListener('click', async (e) => {
       card.classList.add('has-neutral-bar');
     }
 
+    scheduleTabDerivedRefresh();
     showToast('Closed duplicates, kept one copy each');
     return;
   }
@@ -1531,6 +1627,7 @@ document.addEventListener('click', async (e) => {
       animateCardOut(c);
     });
 
+    scheduleTabDerivedRefresh();
     showToast('All tabs closed. Fresh start.');
     return;
   }
@@ -1578,8 +1675,34 @@ document.addEventListener('input', async (e) => {
   }
 });
 
+document.getElementById('proxyForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (proxyController.state().busy) return;
+  const type = document.getElementById('proxyMatchType').value;
+  const input = document.getElementById('proxyValue');
+  try {
+    const data = await TabOutProxyRouting.submitManualRule(
+      type, input.value, (matchType, value) => proxyController.add(matchType, value)
+    );
+    if (!data) return;
+    input.value = '';
+    updateProxyPreview();
+    proxyActionToast(data);
+  } catch (error) {
+    if (error.code === 'invalid_keyword_input') showToast(error.message);
+    else proxyActionError(error);
+  }
+});
+
+document.getElementById('proxyMatchType').addEventListener('change', updateProxyPreview);
+document.getElementById('proxyValue').addEventListener('input', updateProxyPreview);
+
 
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
+TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleTabDerivedRefresh);
+proxyController.subscribe(renderProxyRouting);
+updateProxyPreview();
+proxyController.load().catch(error => console.warn('[tab-out] Proxy routing status:', error));
 renderDashboard();

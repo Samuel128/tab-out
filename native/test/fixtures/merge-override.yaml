@@ -1,0 +1,16 @@
+dns:
+  enable: true
+  nameserver:
+    - 223.5.5.5
+  nameserver-policy:
+    '+.internal.example':
+      - 192.0.2.53
+    '+.corp.example':
+      - 192.0.2.54
+rule-providers:
+  existing-provider:
+    type: file
+    behavior: domain
+    path: ./ruleset/existing.yaml
+custom-merge-key:
+  preserved: true

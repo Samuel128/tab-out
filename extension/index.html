@@ -116,6 +116,45 @@
     <div class="history-domains" id="historyDomains"></div>
   </div>
 
+  <section class="proxy-routing-section" id="proxyRoutingSection" aria-labelledby="proxyRoutingTitle">
+    <div class="section-header">
+      <h2 id="proxyRoutingTitle">Proxy routing</h2>
+      <div class="section-line"></div>
+      <div class="section-count" id="proxyRuleCount">— rules</div>
+    </div>
+    <div class="proxy-routing-panel">
+      <div class="proxy-status-row">
+        <span class="proxy-status-dot" id="proxyStatusDot" aria-hidden="true"></span>
+        <span id="proxyStatus" role="status" aria-live="polite">Checking native helper…</span>
+        <button type="button" class="proxy-retry" data-action="proxy-retry">Retry</button>
+      </div>
+      <div class="proxy-last-sync" id="proxyLastSync">Last sync: —</div>
+      <form class="proxy-form" id="proxyForm">
+        <label class="proxy-field">
+          <span>Match</span>
+          <select id="proxyMatchType" name="type">
+            <option value="suffix">Domain suffix</option>
+            <option value="keyword">Domain contains</option>
+            <option value="exact">Exact domain</option>
+          </select>
+        </label>
+        <label class="proxy-field proxy-value-field">
+          <span>Domain or keyword</span>
+          <input id="proxyValue" name="value" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" autocapitalize="none" required>
+        </label>
+        <button type="submit" class="proxy-add" id="proxyAdd">Add rule</button>
+      </form>
+      <p class="proxy-keyword-warning" id="proxyKeywordWarning" hidden>Contains matching is broad and may match unrelated domains. Tab Out cannot automatically identify all company domains; check the target before adding.</p>
+      <div class="proxy-preview">Rule preview: <code id="proxyRulePreview">Choose a match and enter a value</code></div>
+      <div class="proxy-rules-heading">Routing list <span>Automatic sync</span></div>
+      <div class="proxy-rule-list" id="proxyRuleList"><p class="proxy-empty">Connect the native helper to view rules.</p></div>
+      <div class="proxy-undo" id="proxyUndo" hidden>
+        <span>Rule removed.</span>
+        <button type="button" data-action="proxy-undo">Undo (5s)</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ================================================================
        FOOTER — global stats + refresh control
        ================================================================ -->
@@ -126,6 +165,22 @@
   </footer>
 
 </div><!-- end .container -->
+
+<dialog class="proxy-confirm-dialog" id="proxyQuickAddDialog" aria-labelledby="proxyConfirmTitle" aria-describedby="proxyConfirmDescription">
+  <div class="proxy-confirm-inner">
+    <div class="proxy-confirm-eyebrow">Before routing</div>
+    <h2 id="proxyConfirmTitle">Add to proxy?</h2>
+    <p id="proxyConfirmDescription">The domain <strong id="proxyConfirmDomain"></strong> will be sent through Clash. A public-looking name may still be a company site.</p>
+    <label class="proxy-confirm-check">
+      <input type="checkbox" id="proxyConfirmCheck">
+      <span>This is not a company/internal domain</span>
+    </label>
+    <div class="proxy-confirm-actions">
+      <button type="button" id="proxyConfirmCancel">Cancel</button>
+      <button type="button" id="proxyConfirmSubmit" disabled>Confirm and add</button>
+    </div>
+  </div>
+</dialog>
 
 <!-- ================================================================
      TOAST — floats above everything, used for action confirmations
@@ -144,6 +199,8 @@
 <script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
+<script src="tab-state.js"></script>
+<script src="proxy-routing.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,59 @@
+#!/usr/bin/ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+
+require 'time'
+require 'tab_out_proxy/mihomo_client'
+require 'tab_out_proxy/profile_manager'
+require 'tab_out_proxy/protocol'
+require 'tab_out_proxy/service'
+require 'tab_out_proxy/store'
+
+STDIN.binmode
+STDOUT.binmode
+
+data_home = File.expand_path(
+  ENV.fetch(
+    'TAB_OUT_PROXY_HOME',
+    File.join(Dir.home, 'Library', 'Application Support', 'Tab Out Proxy')
+  )
+)
+clash_config_dir = File.expand_path(
+  ENV.fetch(
+    'TAB_OUT_CLASH_CONFIG_DIR',
+    File.join(
+      Dir.home,
+      'Library',
+      'Application Support',
+      'io.github.clash-verge-rev.clash-verge-rev'
+    )
+  )
+)
+socket_path = File.expand_path(
+  ENV.fetch('TAB_OUT_MIHOMO_SOCKET', '/tmp/verge/verge-mihomo.sock')
+)
+
+store = TabOutProxy::Store.new(root: data_home)
+profile_manager = TabOutProxy::ProfileManager.new(
+  config_dir: clash_config_dir,
+  provider_path: store.provider_path
+)
+client = TabOutProxy::MihomoClient.new(socket_path: socket_path)
+service = TabOutProxy::Service.new(
+  store: store,
+  profile_manager: profile_manager,
+  mihomo_client: client
+)
+
+begin
+  request = TabOutProxy::Protocol.read(STDIN)
+  command, payload = TabOutProxy::Protocol.validate_request(request)
+  response = TabOutProxy::Protocol.success(service.call(command, payload))
+rescue StandardError => error
+  response = TabOutProxy::Protocol.failure(error)
+  code = error.is_a?(TabOutProxy::Error) ? error.code : 'internal_error'
+  STDERR.puts("#{Time.now.utc.iso8601} #{code}")
+end
+
+TabOutProxy::Protocol.write(STDOUT, response)

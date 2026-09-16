@@ -1,0 +1,23 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative 'native_host_install'
+
+path = TabOutNativeHostInstall::DEFAULT_EXTENSION
+if ARGV.length == 2 && ARGV[0] == '--extension-path'
+  path = ARGV[1]
+elsif !ARGV.empty?
+  warn 'Usage: install-native-host [--extension-path ABSOLUTE_EXTENSION_DIR]'
+  exit 2
+end
+
+begin
+  raise ArgumentError, 'Extension path must be absolute' unless path.start_with?('/')
+  id = TabOutNativeHostInstall.install(path)
+  puts "Installed #{TabOutNativeHostInstall::HOST_NAME} for Chrome extension #{id}"
+  puts "Registration: #{TabOutNativeHostInstall.manifest_path}"
+  puts 'No Clash connection or rule activation was attempted.'
+rescue StandardError => error
+  warn "Installation failed: #{error.message}"
+  exit 1
+end

@@ -604,13 +604,16 @@ footer {
   padding-top: 20px;
   border-top: 1px solid var(--warm-gray);
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
 }
 
-.footer-stats {
+.open-tabs-total {
   display: flex;
-  gap: 32px;
+  justify-content: flex-start;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--warm-gray);
 }
 
 .stat {

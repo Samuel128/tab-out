@@ -720,16 +720,7 @@ let domainGroups = [];
  * pages, about:blank, etc.
  */
 function getRealTabs() {
-  return openTabs.filter(t => {
-    const url = t.url || '';
-    return (
-      !url.startsWith('chrome://') &&
-      !url.startsWith('chrome-extension://') &&
-      !url.startsWith('about:') &&
-      !url.startsWith('edge://') &&
-      !url.startsWith('brave://')
-    );
-  });
+  return TabOutTabState.getRealTabs(openTabs);
 }
 
 /**
@@ -801,17 +792,17 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
  * group = { domain: string, tabs: [{ url, title, id, windowId, active }] }
  */
 function renderDomainCard(group) {
-  const tabs      = group.tabs || [];
-  const tabCount  = tabs.length;
+  const tabs = group.tabs || [];
+  const {
+    tabCount,
+    duplicateExtras: totalExtras,
+    urlCounts,
+  } = TabOutTabState.getGroupStats(tabs);
   const isLanding = group.domain === '__landing-pages__';
   const stableId  = 'domain-' + group.domain.replace(/[^a-z0-9]/g, '-');
 
-  // Count duplicates (exact URL match)
-  const urlCounts = {};
-  for (const tab of tabs) urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
   const dupeUrls   = Object.entries(urlCounts).filter(([, c]) => c > 1);
-  const hasDupes   = dupeUrls.length > 0;
-  const totalExtras = dupeUrls.reduce((s, [, c]) => s + c - 1, 0);
+  const hasDupes   = totalExtras > 0;
 
   const tabBadge = `<span class="open-tabs-badge">
     ${ICONS.tabs}
@@ -1109,25 +1100,13 @@ async function renderHistorySection() {
    ---------------------------------------------------------------- */
 
 /**
- * renderStaticDashboard()
+ * renderOpenTabsSection()
  *
- * The main render function:
- * 1. Paints greeting + date
- * 2. Fetches open tabs via chrome.tabs.query()
- * 3. Groups tabs by domain (with landing pages pulled out to their own group)
- * 4. Renders domain cards
- * 5. Updates footer stats
- * 6. Renders the "Saved for Later" checklist
+ * Fetches and renders only the Chrome tab-derived parts of the dashboard.
+ * Saved items and history stay untouched during live tab refreshes.
  */
-async function renderStaticDashboard() {
-  // --- Header ---
-  const greetingEl = document.getElementById('greeting');
-  const dateEl     = document.getElementById('dateDisplay');
-  if (greetingEl) greetingEl.textContent = getGreeting();
-  if (dateEl)     dateEl.textContent     = getDateDisplay();
-
-  // --- Fetch tabs ---
-  await fetchOpenTabs();
+async function renderOpenTabsSection({ fetchTabs = true } = {}) {
+  if (fetchTabs) await fetchOpenTabs();
   const realTabs = getRealTabs();
 
   // --- Group tabs by domain ---
@@ -1254,26 +1233,44 @@ async function renderStaticDashboard() {
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
+    if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = '';
     openTabsSection.style.display = 'none';
   }
 
   // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
-  if (statTabs) statTabs.textContent = openTabs.length;
+  if (statTabs) statTabs.textContent = realTabs.length;
 
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
+}
 
-  // --- 渲染『已保存』列 ---
+/**
+ * renderStaticDashboard()
+ *
+ * Paints the full dashboard on initial load. Later Chrome tab events use the
+ * focused renderer above so saved items and history are not rebuilt.
+ */
+async function renderStaticDashboard() {
+  const greetingEl = document.getElementById('greeting');
+  const dateEl = document.getElementById('dateDisplay');
+  if (greetingEl) greetingEl.textContent = getGreeting();
+  if (dateEl) dateEl.textContent = getDateDisplay();
+
+  await renderOpenTabsSection();
   await renderDeferredColumn();
-
-  // --- 渲染底部『曾经访问』历史域名区块 ---
   await renderHistorySection();
 }
 
 async function renderDashboard() {
   await renderStaticDashboard();
 }
+
+const scheduleOpenTabsRefresh = TabOutTabState.createDebouncedTask(() => {
+  renderOpenTabsSection().catch(error => {
+    console.warn('[tab-out] Failed to refresh open tabs:', error);
+  });
+}, 120);
 
 
 /* ----------------------------------------------------------------
@@ -1301,6 +1298,7 @@ document.addEventListener('click', async (e) => {
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
+    scheduleOpenTabsRefresh();
     showToast('Closed extra Tab Out tabs');
     return;
   }
@@ -1359,10 +1357,7 @@ document.addEventListener('click', async (e) => {
       }, 200);
     }
 
-    // Update footer
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
-
+    scheduleOpenTabsRefresh();
     showToast('Tab closed');
     return;
   }
@@ -1398,6 +1393,7 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => chip.remove(), 200);
     }
 
+    scheduleOpenTabsRefresh();
     showToast('Saved for later');
     await renderDeferredColumn();
     return;
@@ -1474,8 +1470,7 @@ document.addEventListener('click', async (e) => {
     const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
     showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
 
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
+    scheduleOpenTabsRefresh();
     return;
   }
 
@@ -1511,6 +1506,7 @@ document.addEventListener('click', async (e) => {
       card.classList.add('has-neutral-bar');
     }
 
+    scheduleOpenTabsRefresh();
     showToast('Closed duplicates, kept one copy each');
     return;
   }
@@ -1531,6 +1527,7 @@ document.addEventListener('click', async (e) => {
       animateCardOut(c);
     });
 
+    scheduleOpenTabsRefresh();
     showToast('All tabs closed. Fresh start.');
     return;
   }
@@ -1582,4 +1579,5 @@ document.addEventListener('input', async (e) => {
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
+TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleOpenTabsRefresh);
 renderDashboard();

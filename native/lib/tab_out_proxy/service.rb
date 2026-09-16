@@ -21,18 +21,24 @@ module TabOutProxy
 
       case command
       when 'status'
-        synchronize_transaction
+        with_transaction_lock { synchronize_transaction }
       when 'list'
-        response('stored', @profile_manager.profile_info, nil)
+        with_transaction_lock do
+          response('stored', @profile_manager.profile_info, nil)
+        end
       when 'add'
         type = payload.fetch('type')
         value = payload.fetch('value')
-        synchronize_transaction do
-          @store.add(type: type, value: value)
+        with_transaction_lock do
+          synchronize_transaction do
+            @store.add(type: type, value: value)
+          end
         end
       when 'remove'
         id = payload.fetch('id')
-        synchronize_transaction { @store.remove(id) }
+        with_transaction_lock do
+          synchronize_transaction { @store.remove(id) }
+        end
       else
         raise ValidationError.new('unknown_command', 'Unsupported native command')
       end
@@ -69,8 +75,7 @@ module TabOutProxy
       @mihomo_client.reload_config(@profile_manager.active_config_path)
       @mihomo_client.refresh_provider('need-proxy')
       provider = @mihomo_client.provider('need-proxy')
-      unless provider.is_a?(Hash) && !provider.empty? &&
-             (!provider.key?('name') || provider['name'] == 'need-proxy')
+      unless healthy_provider?(provider)
         raise SyncError.new('provider_verification_failed', 'Clash did not verify the need-proxy provider')
       end
 
@@ -83,6 +88,20 @@ module TabOutProxy
       restore_running_config
     rescue StandardError => error
       raise SyncError.new('rollback_failed', "Could not restore the previous proxy configuration: #{error.class}")
+    end
+
+    def with_transaction_lock(&block)
+      @store.with_transaction_lock(&block)
+    end
+
+    def healthy_provider?(provider)
+      provider.is_a?(Hash) &&
+        provider['name'] == 'need-proxy' &&
+        provider['type'] == 'Rule' &&
+        provider['behavior'] == 'Classical' &&
+        provider['vehicleType'] == 'File' &&
+        provider['ruleCount'].is_a?(Integer) &&
+        provider['ruleCount'] == @store.list.length
     end
 
     def restore_running_config

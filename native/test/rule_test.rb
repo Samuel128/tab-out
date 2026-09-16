@@ -75,6 +75,18 @@ class RuleTest < Minitest::Test
     end
   end
 
+  def test_rejects_keywords_that_can_match_protected_corporate_targets
+    %w[internal hww corp yum].each do |keyword|
+      assert_rule_error('corporate_target', type: 'keyword', value: keyword)
+    end
+  end
+
+  def test_rejects_keywords_that_can_match_private_ip_fragments
+    %w[192.168 172.31 172.16 169.254 127.0 10.0 fe80 fc00].each do |keyword|
+      assert_rule_error('private_target', type: 'keyword', value: keyword)
+    end
+  end
+
   private
 
   def assert_rule_error(code, type:, value:)

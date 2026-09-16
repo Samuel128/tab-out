@@ -17,6 +17,17 @@ module TabOutProxy
       @state_path = File.join(@root, 'state.json')
       @provider_path = File.join(@root, 'need-proxy.yaml')
       @lock_path = File.join(@root, '.lock')
+      @transaction_lock_path = File.join(@root, '.transaction.lock')
+    end
+
+    def with_transaction_lock
+      FileUtils.mkdir_p(@root)
+      File.open(@transaction_lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
+        lock.flock(File::LOCK_EX)
+        yield
+      ensure
+        lock.flock(File::LOCK_UN) rescue nil
+      end
     end
 
     def list

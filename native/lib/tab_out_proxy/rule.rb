@@ -22,6 +22,10 @@ module TabOutProxy
       10.0.0.0/8 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12
       192.168.0.0/16 ::1/128 fc00::/7 fe80::/10
     ].map { |cidr| IPAddr.new(cidr) }.freeze
+    PRIVATE_KEYWORD_TARGETS = (
+      %w[localhost 10. 127. 169.254 192.168 ::1 fe80 fc00 fd00] +
+      (16..31).map { |octet| "172.#{octet}" }
+    ).freeze
 
     attr_reader :id, :type, :value, :created_at
 
@@ -83,6 +87,9 @@ module TabOutProxy
       if corporate_target?
         raise ValidationError.new('corporate_target', 'Corporate domains must remain direct')
       end
+      if type == 'keyword' && private_keyword_target?
+        raise ValidationError.new('private_target', 'Keywords that can match private addresses are not allowed')
+      end
 
       ip = parse_ip(value)
       if ip && PRIVATE_RANGES.any? { |range| range.include?(ip) }
@@ -108,6 +115,12 @@ module TabOutProxy
 
     def valid_keyword?
       value.match?(/\A[a-z0-9.-]+\z/) && !value.include?('..')
+    end
+
+    def private_keyword_target?
+      PRIVATE_KEYWORD_TARGETS.any? do |target|
+        target.include?(value) || value.include?(target)
+      end
     end
 
     def valid_hostname?

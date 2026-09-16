@@ -9,12 +9,19 @@ require 'tab_out_proxy/store'
 class ServiceTest < Minitest::Test
   FIXTURES = File.expand_path('fixtures', __dir__)
   FIXED_TIME = Time.utc(2026, 9, 16, 8, 30, 0)
+  HEALTHY_PROVIDER = {
+    'name' => 'need-proxy',
+    'type' => 'Rule',
+    'behavior' => 'Classical',
+    'vehicleType' => 'File',
+    'ruleCount' => 1
+  }.freeze
 
   class FakeClient
     attr_accessor :online, :provider_result
     attr_reader :calls
 
-    def initialize(online: true, provider_result: { 'name' => 'need-proxy' })
+    def initialize(online: true, provider_result: HEALTHY_PROVIDER.dup)
       @online = online
       @provider_result = provider_result
       @calls = []
@@ -54,6 +61,27 @@ class ServiceTest < Minitest::Test
     def raise_failure(method)
       failure = @failures.fetch(method, []).shift
       raise failure if failure
+    end
+  end
+
+  class BlockingFailClient < FakeClient
+    attr_reader :entered, :release
+
+    def initialize
+      super
+      @entered = Queue.new
+      @release = Queue.new
+      @reload_count = 0
+    end
+
+    def reload_config(path)
+      @calls << [:reload_config, path]
+      @reload_count += 1
+      return {} unless @reload_count == 1
+
+      entered << true
+      release.pop
+      raise TabOutProxy::SyncError.new('clash_http_error', 'HTTP 500')
     end
   end
 
@@ -153,6 +181,67 @@ class ServiceTest < Minitest::Test
 
     assert_equal 'provider_verification_failed', error.code
     assert_empty @store.list
+  end
+
+  def test_provider_verification_rejects_nonempty_but_unhealthy_or_wrong_identity_responses
+    invalid_responses = [
+      { 'anything' => true },
+      HEALTHY_PROVIDER.merge('name' => 'other-provider'),
+      HEALTHY_PROVIDER.merge('vehicleType' => 'HTTP'),
+      HEALTHY_PROVIDER.merge('behavior' => 'Domain'),
+      HEALTHY_PROVIDER.merge('ruleCount' => 0)
+    ]
+
+    invalid_responses.each do |provider|
+      client = FakeClient.new(provider_result: provider)
+      service = build_service(client)
+      error = assert_raises(TabOutProxy::SyncError) do
+        service.call('add', 'type' => 'suffix', 'value' => 'openai.com')
+      end
+      assert_equal 'provider_verification_failed', error.code
+      assert_empty @store.list
+    end
+  end
+
+  def test_failed_transaction_cannot_rollback_a_later_successful_transaction
+    failing_client = BlockingFailClient.new
+    successful_client = FakeClient.new
+    failing_service = build_service(failing_client)
+    successful_service = build_service(successful_client)
+    failures = Queue.new
+    successes = Queue.new
+
+    first = Thread.new do
+      failing_service.call('add', 'type' => 'suffix', 'value' => 'openai.com')
+    rescue StandardError => error
+      failures << error
+    end
+    failing_client.entered.pop
+
+    second = Thread.new do
+      successes << successful_service.call('add', 'type' => 'keyword', 'value' => 'google')
+    rescue StandardError => error
+      failures << error
+    end
+
+    begin
+      sleep 0.15
+      blocked_while_first_active = second.alive? && successful_client.calls.empty?
+    ensure
+      failing_client.release << true
+      first.join(2)
+      second.join(2)
+    end
+
+    assert blocked_while_first_active, 'second transaction was not serialized behind the first'
+    assert_equal 'clash_http_error', failures.pop.code
+    assert failures.empty?, 'successful transaction unexpectedly failed'
+    assert_equal 'active', successes.pop.fetch('status')
+    assert_equal ['google'], @store.list.map(&:value)
+  ensure
+    failing_client.release << true if failing_client && failing_client.release.empty?
+    first.kill if first && first.alive?
+    second.kill if second && second.alive?
   end
 
   def test_status_retries_pending_synchronization

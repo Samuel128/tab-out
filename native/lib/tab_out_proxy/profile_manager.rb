@@ -167,8 +167,11 @@ module TabOutProxy
 
     def integrated_merge(original)
       merge = deep_copy(original)
-      providers = merge['rule-providers']
-      providers = {} unless providers.is_a?(Hash)
+      providers = optional_mapping(
+        merge,
+        'rule-providers',
+        'merge_provider_container_invalid'
+      )
       merge['rule-providers'] = providers
       providers['need-proxy'] = provider_definition
       merge
@@ -181,16 +184,21 @@ module TabOutProxy
       append = array_of_strings(rules['append'], 'rules_override_invalid')
       managed = CORPORATE_RULES + [PROVIDER_RULE]
 
-      rules['prepend'] = managed + prepend.reject { |rule| managed.include?(rule) }
-      rules['delete'] = (delete + [SOURCE_TERMINAL]).uniq
-      rules['append'] = append.reject { |rule| [SOURCE_TERMINAL, TARGET_TERMINAL].include?(rule) } + [TARGET_TERMINAL]
+      rules['prepend'] = managed + prepend.reject do |rule|
+        managed.include?(rule) || terminal_rule?(rule)
+      end
+      rules['delete'] = (delete.reject { |rule| rule == TARGET_TERMINAL } + [SOURCE_TERMINAL]).uniq
+      rules['append'] = append.reject { |rule| terminal_rule?(rule) } + [TARGET_TERMINAL]
       rules
     end
 
     def integrated_active(original)
       active = deep_copy(original)
-      providers = active['rule-providers']
-      providers = {} unless providers.is_a?(Hash)
+      providers = optional_mapping(
+        active,
+        'rule-providers',
+        'active_provider_container_invalid'
+      )
       active['rule-providers'] = providers
       providers['need-proxy'] = provider_definition
 
@@ -216,6 +224,18 @@ module TabOutProxy
       return value if value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
 
       unsupported!(code, 'Clash rule override has an unsupported shape')
+    end
+
+    def optional_mapping(parent, key, code)
+      value = parent[key]
+      return {} if value.nil?
+      return value if value.is_a?(Hash)
+
+      unsupported!(code, 'Clash configuration contains an unsafe managed container')
+    end
+
+    def terminal_rule?(rule)
+      rule.start_with?('MATCH,')
     end
 
     def write_yaml_if_changed(path, value)

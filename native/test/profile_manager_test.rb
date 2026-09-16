@@ -92,6 +92,60 @@ class ProfileManagerTest < Minitest::Test
     paths.each { |path| assert_equal first.fetch(path), File.binread(path) }
   end
 
+  def test_terminal_rules_in_overrides_cannot_defeat_final_direct_default
+    rules = load_yaml(profile_path('rules-override.yaml'))
+    rules['prepend'].concat(['MATCH,PROXY', 'MATCH,DIRECT'])
+    rules['delete'].concat(['MATCH,DIRECT', 'MATCH,REJECT'])
+    rules['append'].concat(['MATCH,REJECT', 'MATCH,PROXY'])
+    File.write(profile_path('rules-override.yaml'), YAML.dump(rules))
+
+    @manager.ensure_integrated!
+
+    integrated = load_yaml(profile_path('rules-override.yaml'))
+    refute integrated.fetch('prepend').any? { |rule| rule.start_with?('MATCH,') }
+    refute_includes integrated.fetch('delete'), 'MATCH,DIRECT'
+    assert_includes integrated.fetch('delete'), 'MATCH,PROXY'
+    assert_equal ['DOMAIN-SUFFIX,fallback.example,DIRECT', 'MATCH,DIRECT'], integrated.fetch('append')
+    assert_equal 'MATCH,DIRECT', load_yaml(File.join(@directory, 'clash-verge.yaml')).fetch('rules').last
+  end
+
+  def test_non_hash_merge_rule_providers_are_rejected_without_writes
+    merge = load_yaml(profile_path('merge-override.yaml'))
+    merge['rule-providers'] = ['unsafe-provider-container']
+    File.write(profile_path('merge-override.yaml'), YAML.dump(merge))
+    before = managed_paths.to_h { |path| [path, File.binread(path)] }
+
+    error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+    assert_equal 'merge_provider_container_invalid', error.code
+    before.each { |path, content| assert_equal content, File.binread(path) }
+  end
+
+  def test_non_hash_active_rule_providers_are_rejected_without_writes
+    active_path = File.join(@directory, 'clash-verge.yaml')
+    active = load_yaml(active_path)
+    active['rule-providers'] = 'unsafe-provider-container'
+    File.write(active_path, YAML.dump(active))
+    before = managed_paths.to_h { |path| [path, File.binread(path)] }
+
+    error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+    assert_equal 'active_provider_container_invalid', error.code
+    before.each { |path, content| assert_equal content, File.binread(path) }
+  end
+
+  def test_non_array_rule_override_container_is_rejected_without_writes
+    rules = load_yaml(profile_path('rules-override.yaml'))
+    rules['prepend'] = { 'unsafe' => true }
+    File.write(profile_path('rules-override.yaml'), YAML.dump(rules))
+    before = managed_paths.to_h { |path| [path, File.binread(path)] }
+
+    error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+    assert_equal 'rules_override_invalid', error.code
+    before.each { |path, content| assert_equal content, File.binread(path) }
+  end
+
   def test_missing_proxy_group_is_rejected_without_writes
     remote = load_yaml(profile_path('remote-profile.json'))
     remote['proxy-groups'][0]['name'] = 'Fallback'

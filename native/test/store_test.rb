@@ -125,6 +125,42 @@ class StoreTest < Minitest::Test
     assert_store_error('unsupported_state') { @store.list }
   end
 
+  def test_transaction_lock_blocks_another_process_until_release
+    ready_reader, ready_writer = IO.pipe
+    entered_reader, entered_writer = IO.pipe
+    child_pid = nil
+
+    @store.with_transaction_lock do
+      child_pid = fork do
+        ready_reader.close
+        entered_reader.close
+        ready_writer.write('ready')
+        ready_writer.close
+        @store.with_transaction_lock { entered_writer.write('entered') }
+        entered_writer.close
+        exit! 0
+      end
+
+      ready_writer.close
+      entered_writer.close
+      assert_equal 'ready', ready_reader.read(5)
+      refute IO.select([entered_reader], nil, nil, 0.15), 'child entered while parent held transaction lock'
+    end
+
+    assert IO.select([entered_reader], nil, nil, 2), 'child did not enter after transaction lock release'
+    assert_equal 'entered', entered_reader.read
+    Process.wait(child_pid)
+    assert_predicate $?, :success?
+  ensure
+    [ready_reader, ready_writer, entered_reader, entered_writer].compact.each do |io|
+      io.close unless io.closed?
+    end
+    if child_pid
+      Process.kill('KILL', child_pid) rescue nil
+      Process.wait(child_pid) rescue nil
+    end
+  end
+
   private
 
   def safe_yaml(path)

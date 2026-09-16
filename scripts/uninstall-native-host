@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative 'native_host_install'
+
+unless ARGV.empty?
+  warn 'Usage: uninstall-native-host'
+  exit 2
+end
+
+begin
+  TabOutNativeHostInstall.uninstall
+  puts 'Removed Tab Out Native Messaging registration and code.'
+  puts "Preserved managed rules in #{TabOutNativeHostInstall.data_dir}"
+rescue StandardError => error
+  warn "Uninstallation failed: #{error.message}"
+  exit 1
+end

@@ -28,6 +28,13 @@ let openTabs = [];
 const proxyController = TabOutProxyRouting.createController(
   (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
 );
+const confirmProxyQuickAdd = TabOutProxyRouting.createQuickAddDialog({
+  dialog: document.getElementById('proxyQuickAddDialog'),
+  domain: document.getElementById('proxyConfirmDomain'),
+  check: document.getElementById('proxyConfirmCheck'),
+  cancel: document.getElementById('proxyConfirmCancel'),
+  submit: document.getElementById('proxyConfirmSubmit'),
+});
 
 function refreshQuickAddButtons(state) {
   document.querySelectorAll('[data-action="proxy-quick-add"]').forEach(button => {
@@ -1359,9 +1366,12 @@ document.addEventListener('click', async (e) => {
         return;
       }
       if (action === 'proxy-quick-add') {
-        const host = TabOutProxyRouting.quickAddHost(`https://${actionEl.dataset.proxyDomain || ''}`);
-        if (!host) return;
-        proxyActionToast(await proxyController.add('suffix', host));
+        const data = await TabOutProxyRouting.confirmedQuickAdd(
+          actionEl.dataset.proxyDomain || '',
+          confirmProxyQuickAdd,
+          host => proxyController.add('suffix', host)
+        );
+        if (data) proxyActionToast(data);
         return;
       }
       if (action === 'proxy-remove') {

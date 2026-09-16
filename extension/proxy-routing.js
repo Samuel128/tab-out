@@ -86,6 +86,42 @@ const TabOutProxyRouting = (() => {
     return host;
   }
 
+  async function confirmedQuickAdd(host, confirm, add) {
+    const eligible = quickAddHost(`https://${host}`);
+    if (!eligible) return null;
+    const approved = await confirm(eligible, 'This is not a company/internal domain');
+    if (approved !== true) return null;
+    return add(eligible);
+  }
+
+  function createQuickAddDialog({ dialog, domain, check, cancel, submit }) {
+    check.addEventListener('change', () => { submit.disabled = !check.checked; });
+    cancel.addEventListener('click', () => { if (dialog.open) dialog.close('cancel'); });
+    submit.addEventListener('click', () => {
+      if (dialog.open && check.checked && !submit.disabled) dialog.close('confirm');
+    });
+
+    return host => {
+      if (dialog.open) return Promise.resolve(false);
+      domain.textContent = host;
+      check.checked = false;
+      submit.disabled = true;
+      dialog.returnValue = 'cancel';
+      return new Promise((resolve, reject) => {
+        const onClose = () => {
+          dialog.removeEventListener('close', onClose);
+          resolve(dialog.returnValue === 'confirm' && check.checked);
+        };
+        dialog.addEventListener('close', onClose);
+        try { dialog.showModal(); }
+        catch (error) {
+          dialog.removeEventListener('close', onClose);
+          reject(error);
+        }
+      });
+    };
+  }
+
   function isSuffixCovered(host, rules) {
     const name = String(host || '').toLowerCase();
     return Array.isArray(rules) && rules.some(rule => rule.type === 'suffix' &&
@@ -243,7 +279,7 @@ const TabOutProxyRouting = (() => {
     };
   }
 
-  return { HOST, VERSION, sendRequest, quickAddHost, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
+  return { HOST, VERSION, sendRequest, quickAddHost, confirmedQuickAdd, createQuickAddDialog, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = TabOutProxyRouting;

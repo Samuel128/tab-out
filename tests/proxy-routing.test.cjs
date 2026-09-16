@@ -69,6 +69,88 @@ test('quick add accepts only public HTTP(S) hostnames', () => {
   assert.equal(ProxyRouting.quickAddHost('https://example.test'), null);
 });
 
+test('quick add requires explicit confirmation before sending add', async () => {
+  const calls = [];
+  const result = await ProxyRouting.confirmedQuickAdd(
+    'docs.example.com',
+    async (host, statement) => {
+      calls.push(['confirm', host, statement]);
+      return true;
+    },
+    async host => {
+      calls.push(['add', host]);
+      return { status: 'pending' };
+    }
+  );
+  assert.deepEqual(calls, [
+    ['confirm', 'docs.example.com', 'This is not a company/internal domain'],
+    ['add', 'docs.example.com'],
+  ]);
+  assert.equal(result.status, 'pending');
+});
+
+test('cancelled or dismissed quick add makes no mutation', async () => {
+  let adds = 0;
+  const add = async () => { adds += 1; };
+  assert.equal(await ProxyRouting.confirmedQuickAdd('docs.example.com', async () => false, add), null);
+  assert.equal(await ProxyRouting.confirmedQuickAdd('docs.example.com', async () => undefined, add), null);
+  assert.equal(adds, 0);
+});
+
+test('known company domains are hard-blocked before confirmation and add', async () => {
+  let confirms = 0;
+  let adds = 0;
+  const confirm = async () => { confirms += 1; return true; };
+  const add = async () => { adds += 1; };
+  for (const host of ['business.example', 'intranet.business.example', 'app.internal.example', 'api.corp.example']) {
+    assert.equal(await ProxyRouting.confirmedQuickAdd(host, confirm, add), null);
+  }
+  assert.equal(confirms, 0);
+  assert.equal(adds, 0);
+});
+
+test('confirmation dialog requires checkbox and treats Cancel or Esc as rejection', async () => {
+  function element() {
+    const handlers = new Map();
+    return {
+      addEventListener(type, handler) { if (!handlers.has(type)) handlers.set(type, new Set()); handlers.get(type).add(handler); },
+      removeEventListener(type, handler) { handlers.get(type)?.delete(handler); },
+      dispatch(type) { for (const handler of [...(handlers.get(type) || [])]) handler(); },
+    };
+  }
+  const dialog = {
+    ...element(), open: false, returnValue: '',
+    showModal() { this.open = true; },
+    close(value = this.returnValue) { this.returnValue = value; this.open = false; this.dispatch('close'); },
+  };
+  const domain = { textContent: '' };
+  const check = { ...element(), checked: false };
+  const cancel = element();
+  const submit = { ...element(), disabled: true };
+  const confirm = ProxyRouting.createQuickAddDialog({ dialog, domain, check, cancel, submit });
+
+  const approved = confirm('docs.example.com');
+  assert.equal(domain.textContent, 'docs.example.com');
+  assert.equal(submit.disabled, true);
+  submit.dispatch('click');
+  assert.equal(dialog.open, true);
+  check.checked = true;
+  check.dispatch('change');
+  assert.equal(submit.disabled, false);
+  submit.dispatch('click');
+  assert.equal(await approved, true);
+
+  const cancelled = confirm('news.example.com');
+  assert.equal(check.checked, false);
+  assert.equal(submit.disabled, true);
+  cancel.dispatch('click');
+  assert.equal(await cancelled, false);
+
+  const escaped = confirm('mail.example.com');
+  dialog.close();
+  assert.equal(await escaped, false);
+});
+
 test('suffix coverage includes parent domain and subdomains but not lookalikes', () => {
   const rules = [
     { id: 'a', type: 'suffix', value: 'example.com' },
@@ -170,6 +252,14 @@ test('proxy routing controls are placed between history and footer and loaded be
   }
   assert.ok(html.indexOf('src="proxy-routing.js"') < html.indexOf('src="app.js"'));
   assert.match(html, /cannot automatically identify all company domains/i);
+  for (const id of ['proxyQuickAddDialog', 'proxyConfirmDomain', 'proxyConfirmCheck', 'proxyConfirmCancel', 'proxyConfirmSubmit']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(html, /This is not a company\/internal domain/);
+  assert.match(html, /id="proxyConfirmSubmit" disabled/);
+  const app = fs.readFileSync(path.join(__dirname, '../extension/app.js'), 'utf8');
+  assert.match(app, /TabOutProxyRouting\.confirmedQuickAdd\(/);
+  assert.match(app, /TabOutProxyRouting\.createQuickAddDialog\(/);
 });
 
 test('manifest adds only nativeMessaging without removing old permissions', () => {

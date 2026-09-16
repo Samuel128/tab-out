@@ -166,6 +166,22 @@
 
 </div><!-- end .container -->
 
+<dialog class="proxy-confirm-dialog" id="proxyQuickAddDialog" aria-labelledby="proxyConfirmTitle" aria-describedby="proxyConfirmDescription">
+  <div class="proxy-confirm-inner">
+    <div class="proxy-confirm-eyebrow">Before routing</div>
+    <h2 id="proxyConfirmTitle">Add to proxy?</h2>
+    <p id="proxyConfirmDescription">The domain <strong id="proxyConfirmDomain"></strong> will be sent through Clash. A public-looking name may still be a company site.</p>
+    <label class="proxy-confirm-check">
+      <input type="checkbox" id="proxyConfirmCheck">
+      <span>This is not a company/internal domain</span>
+    </label>
+    <div class="proxy-confirm-actions">
+      <button type="button" id="proxyConfirmCancel">Cancel</button>
+      <button type="button" id="proxyConfirmSubmit" disabled>Confirm and add</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- ================================================================
      TOAST — floats above everything, used for action confirmations
      Hidden by default via CSS (opacity:0, translateY)

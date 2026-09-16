@@ -75,7 +75,7 @@ The tab dashboard runs inside the Chrome extension. It uses no external server o
 
 This feature is for macOS Chrome/Chromium with Clash Verge Rev. Installing the host only registers a local executable; it does **not** contact Clash or change proxy rules. The extension must contain the `nativeMessaging` permission before installation.
 
-For the existing unpacked extension at `/Users/Samuel/Desktop/Samuel/Slef/github/tab-out/extension`, first deploy the updated extension files to that same directory and reload it from `chrome://extensions`. Do **not** add a Manifest `key` or load a second copy from a worktree: Chrome derives the existing extension ID from the original absolute path, and changing the path changes its ID and separates its saved storage. The expected ID for the original path is `mjdgpafhcdpdckehldcammdkjcicfdka`.
+If you already loaded the unpacked extension, keep using that same `extension/` directory and reload it from `chrome://extensions` after updating the files. Do **not** add a Manifest `key` or load a second copy from a worktree: Chrome derives the extension ID from its absolute path, and changing the path changes its ID and separates its saved storage.
 
 Then, from this repository:
 
@@ -112,7 +112,7 @@ Clash does not read text from the Tab Out form directly. A change follows this p
 
    ```yaml
    payload:
-     - DOMAIN-SUFFIX,chatgpt.com
+     - DOMAIN-SUFFIX,ai.example
    ```
 
 3. The active Clash configuration registers that file as a local, classical `rule-providers.need-proxy` provider. `RULE-SET,need-proxy,PROXY` sends matching domains to the profile's `PROXY` group. Tab Out supports suffix (`DOMAIN-SUFFIX`), exact (`DOMAIN`), and contains (`DOMAIN-KEYWORD`) matches; contains matching is intentionally broad.
@@ -121,12 +121,12 @@ Clash does not read text from the Tab Out form directly. A change follows this p
 The simplified rule order in this setup is:
 
 ```text
-DOMAIN-SUFFIX,internal.example,DIRECT  # known company domains are protected first
+DOMAIN-SUFFIX,internal.example,DIRECT  # known internal domains are protected first
 RULE-SET,need-proxy,PROXY       # domains managed in Tab Out
 MATCH,DIRECT                    # fallback after the remaining direct rules
 ```
 
-Known company domains such as `internal.example`, `corp.example`, and `business.example` have separate `DIRECT` rules ahead of the Tab Out list. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
+Known internal domains have separate `DIRECT` rules ahead of the Tab Out list. The `*.example` names above are illustrative placeholders, not configured rules. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
 
 ---
 

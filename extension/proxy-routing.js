@@ -82,7 +82,7 @@ const TabOutProxyRouting = (() => {
     if (!host.includes('.') || host.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
     if (!host.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label))) return null;
     if (['localhost', 'local', 'internal', 'invalid', 'test'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
-    if (['internal.example', 'corp.example'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
+    if (['internal.example', 'corp.example', 'business.example'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
     return host;
   }
 
@@ -92,11 +92,33 @@ const TabOutProxyRouting = (() => {
       (name === rule.value || name.endsWith(`.${rule.value}`)));
   }
 
-  function quickAddButton(host, rules) {
+  function quickAddPresentation(host, state) {
+    const covered = isSuffixCovered(host, state?.data?.rules);
+    if (!covered && state?.error && state?.failedAddHost === host) {
+      return { label: 'Sync failed', modifier: 'is-failed', disabled: false, title: 'Proxy rule could not be synchronized; click to retry' };
+    }
+    if (!covered) return { label: '+ Add proxy', modifier: '', disabled: false, title: 'Add domain suffix to proxy routing' };
+    if (state?.error) return { label: 'Unverified', modifier: 'is-unverified', disabled: true, title: 'Rule exists, but its Clash status could not be verified' };
+    if (state?.data?.status === 'active') return { label: 'Proxy added', modifier: 'is-active', disabled: true, title: 'Rule verified active in Clash' };
+    if (state?.data?.status === 'pending') return { label: 'Waiting for Clash', modifier: 'is-pending', disabled: true, title: 'Rule saved; waiting for Clash to start' };
+    return { label: 'Sync not checked', modifier: 'is-unverified', disabled: true, title: 'Rule stored locally; Clash sync not checked' };
+  }
+
+  function applyQuickAddButtonState(button, state) {
+    const presentation = quickAddPresentation(button.dataset.proxyDomain, state);
+    for (const modifier of ['is-active', 'is-pending', 'is-unverified', 'is-failed']) {
+      button.classList.toggle(modifier, presentation.modifier === modifier);
+    }
+    button.disabled = presentation.disabled;
+    button.textContent = presentation.label;
+    button.title = presentation.title;
+  }
+
+  function quickAddButton(host, state) {
     const eligible = quickAddHost(`https://${host}`);
     if (!eligible) return '';
-    const covered = isSuffixCovered(eligible, rules);
-    return `<button type="button" class="proxy-quick-add${covered ? ' is-active' : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${covered ? 'disabled' : ''} title="${covered ? 'Already covered by a suffix rule' : 'Add domain suffix to proxy routing'}" aria-label="${covered ? 'Proxy already covers' : 'Add proxy for'} ${escapeHtml(eligible)}">${covered ? 'Proxy added' : '+ Add proxy'}</button>`;
+    const presentation = quickAddPresentation(eligible, state);
+    return `<button type="button" class="proxy-quick-add${presentation.modifier ? ` ${presentation.modifier}` : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${presentation.disabled ? 'disabled' : ''} title="${escapeHtml(presentation.title)}" aria-label="${escapeHtml(presentation.label)} ${escapeHtml(eligible)}">${escapeHtml(presentation.label)}</button>`;
   }
 
   function normalizedInput(type, value) {
@@ -145,15 +167,24 @@ const TabOutProxyRouting = (() => {
     return 'Checking native helper…';
   }
 
+  function actionFeedback(data, error) {
+    if (error) return `Proxy routing failed: ${error.message || 'operation failed'}`;
+    if (data?.status === 'active') return 'Change applied in Clash';
+    if (data?.status === 'pending') return 'Rule saved; waiting for Clash';
+    if (data?.status === 'stored') return 'Rule stored; sync not checked';
+    return 'Proxy routing status unverified';
+  }
+
   function createController(transport, clock = globalThis) {
     let data = null;
     let error = null;
     let busy = false;
     let undoRule = null;
     let undoTimer = null;
+    let failedAddHost = null;
     let onChange = () => {};
 
-    function state() { return { data, error, busy, undo: undoRule }; }
+    function state() { return { data, error, busy, undo: undoRule, failedAddHost }; }
     function notify() { onChange(state()); }
     function clearUndo() {
       if (undoTimer !== null) clock.clearTimeout(undoTimer);
@@ -164,6 +195,7 @@ const TabOutProxyRouting = (() => {
     async function execute(command, payload) {
       busy = true;
       error = null;
+      failedAddHost = null;
       notify();
       try {
         const result = await transport(command, payload);
@@ -171,6 +203,9 @@ const TabOutProxyRouting = (() => {
         return result;
       } catch (failure) {
         error = failure;
+        if (command === 'add' && payload?.type === 'suffix') {
+          failedAddHost = quickAddHost(`https://${payload.value}`);
+        }
         throw failure;
       } finally {
         busy = false;
@@ -208,7 +243,7 @@ const TabOutProxyRouting = (() => {
     };
   }
 
-  return { HOST, VERSION, sendRequest, quickAddHost, quickAddButton, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, escapeHtml, createController };
+  return { HOST, VERSION, sendRequest, quickAddHost, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = TabOutProxyRouting;

@@ -56,6 +56,10 @@ test('quick add accepts only public HTTP(S) hostnames', () => {
   assert.equal(ProxyRouting.quickAddHost('http://localhost:3000'), null);
   assert.equal(ProxyRouting.quickAddHost('https://app.internal.example/a'), null);
   assert.equal(ProxyRouting.quickAddHost('https://api.corp.example'), null);
+  assert.equal(ProxyRouting.quickAddHost('https://business.example'), null);
+  assert.equal(ProxyRouting.quickAddHost('https://intranet.business.example/dashboard'), null);
+  assert.equal(ProxyRouting.quickAddHost('https://notbusiness.example'), 'notbusiness.example');
+  assert.equal(ProxyRouting.quickAddHost('https://business.example.evil.net'), 'business.example.evil.net');
   assert.equal(ProxyRouting.quickAddHost('http://192.168.1.2'), null);
   assert.equal(ProxyRouting.quickAddHost('http://10.1.2.3'), null);
   assert.equal(ProxyRouting.quickAddHost('http://172.31.8.1'), null);
@@ -165,6 +169,7 @@ test('proxy routing controls are placed between history and footer and loaded be
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.ok(html.indexOf('src="proxy-routing.js"') < html.indexOf('src="app.js"'));
+  assert.match(html, /cannot automatically identify all company domains/i);
 });
 
 test('manifest adds only nativeMessaging without removing old permissions', () => {
@@ -177,12 +182,76 @@ test('manifest adds only nativeMessaging without removing old permissions', () =
 test('quick-add markup is absent for synthetic or company hosts and marks covered suffixes', () => {
   assert.equal(ProxyRouting.quickAddButton('__landing-pages__', []), '');
   assert.equal(ProxyRouting.quickAddButton('app.internal.example', []), '');
+  assert.equal(ProxyRouting.quickAddButton('business.example', { data: { status: 'active', rules: [] } }), '');
+  assert.equal(ProxyRouting.quickAddButton('intranet.business.example', { data: { status: 'active', rules: [] } }), '');
   assert.equal(ProxyRouting.quickAddButton('localhost', []), '');
-  const add = ProxyRouting.quickAddButton('docs.example.com', []);
+  const add = ProxyRouting.quickAddButton('docs.example.com', { data: { status: 'active', rules: [] } });
   assert.match(add, /data-action="proxy-quick-add"/);
   assert.match(add, /data-proxy-domain="docs.example.com"/);
   assert.match(add, /Add proxy/);
-  const covered = ProxyRouting.quickAddButton('docs.example.com', [{ type: 'suffix', value: 'example.com' }]);
+  const covered = ProxyRouting.quickAddButton('docs.example.com', { data: { status: 'active', rules: [{ type: 'suffix', value: 'example.com' }] } });
   assert.match(covered, /Proxy added/);
   assert.match(covered, /disabled/);
+});
+
+test('covered quick-add is visibly active only after verified helper status', () => {
+  const rules = [{ type: 'suffix', value: 'example.com' }];
+  const render = (status, error = null) => ProxyRouting.quickAddButton('docs.example.com', { data: { status, rules }, error });
+  assert.match(render('active'), /class="proxy-quick-add is-active"/);
+  for (const status of ['pending', 'stored']) {
+    const html = render(status);
+    assert.doesNotMatch(html, /is-active|Proxy added/);
+    assert.match(html, /disabled/);
+    assert.match(html, status === 'pending' ? /Waiting for Clash/ : /Sync not checked/);
+  }
+  const failed = render('active', { code: 'sync_failed', message: 'Reload failed' });
+  assert.doesNotMatch(failed, /is-active|Proxy added/);
+  assert.match(failed, /Unverified/);
+});
+
+test('existing card and history buttons lose active style when sync becomes pending or fails', () => {
+  const classes = new Set();
+  const button = {
+    dataset: { proxyDomain: 'docs.example.com' },
+    classList: { toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
+    disabled: false,
+    textContent: '',
+    title: '',
+  };
+  const rules = [{ type: 'suffix', value: 'example.com' }];
+  const state = (status, error = null) => ({ data: { status, rules }, error });
+  ProxyRouting.applyQuickAddButtonState(button, state('active'));
+  assert.equal(classes.has('is-active'), true);
+  assert.equal(button.textContent, 'Proxy added');
+  ProxyRouting.applyQuickAddButtonState(button, state('pending'));
+  assert.equal(classes.has('is-active'), false);
+  assert.equal(button.textContent, 'Waiting for Clash');
+  ProxyRouting.applyQuickAddButtonState(button, state('active', { code: 'sync_failed' }));
+  assert.equal(classes.has('is-active'), false);
+  assert.equal(button.textContent, 'Unverified');
+});
+
+test('failed quick-add is marked retryable even when helper rolls the rule back', async () => {
+  const controller = ProxyRouting.createController(async command => {
+    if (command === 'add') throw Object.assign(new Error('Reload failed'), { code: 'sync_failed' });
+    return { status: 'active', rules: [], syncedAt: null };
+  });
+  await controller.load();
+  await assert.rejects(controller.add('suffix', 'docs.example.com'), /Reload failed/);
+  const html = ProxyRouting.quickAddButton('docs.example.com', controller.state());
+  assert.match(html, /Sync failed/);
+  assert.doesNotMatch(html, /is-active|Proxy added|disabled/);
+  assert.match(html, /data-action="proxy-quick-add"/);
+});
+
+test('action toast distinguishes active, pending, stored, and failed sync', () => {
+  assert.match(ProxyRouting.actionFeedback({ status: 'active' }), /applied in Clash/);
+  for (const status of ['pending', 'stored']) {
+    const message = ProxyRouting.actionFeedback({ status });
+    assert.doesNotMatch(message, /applied in Clash|updated in Clash/);
+    assert.match(message, status === 'pending' ? /waiting for Clash/ : /sync not checked/);
+  }
+  const failed = ProxyRouting.actionFeedback(null, { code: 'sync_failed', message: 'Reload failed' });
+  assert.match(failed, /failed/i);
+  assert.doesNotMatch(failed, /applied in Clash|updated in Clash/);
 });

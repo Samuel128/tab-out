@@ -29,13 +29,9 @@ const proxyController = TabOutProxyRouting.createController(
   (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
 );
 
-function refreshQuickAddButtons(rules) {
+function refreshQuickAddButtons(state) {
   document.querySelectorAll('[data-action="proxy-quick-add"]').forEach(button => {
-    const covered = TabOutProxyRouting.isSuffixCovered(button.dataset.proxyDomain, rules);
-    button.disabled = covered;
-    button.classList.toggle('is-active', covered);
-    button.textContent = covered ? 'Proxy added' : '+ Add proxy';
-    button.title = covered ? 'Already covered by a suffix rule' : 'Add domain suffix to proxy routing';
+    TabOutProxyRouting.applyQuickAddButtonState(button, state);
   });
 }
 
@@ -58,7 +54,7 @@ function renderProxyRouting(state) {
   document.getElementById('proxyAdd').disabled = busy;
   document.querySelector('[data-action="proxy-retry"]').disabled = busy;
   list.querySelectorAll('[data-action="proxy-remove"]').forEach(button => { button.disabled = busy; });
-  refreshQuickAddButtons(rules);
+  refreshQuickAddButtons(state);
 }
 
 function updateProxyPreview() {
@@ -70,13 +66,11 @@ function updateProxyPreview() {
 }
 
 function proxyActionToast(data) {
-  if (data.status === 'active') showToast('Proxy routing updated in Clash');
-  else if (data.status === 'pending') showToast('Rule saved; waiting for Clash');
-  else showToast('Rule stored; sync not checked');
+  showToast(TabOutProxyRouting.actionFeedback(data));
 }
 
 function proxyActionError(error) {
-  showToast(`Proxy routing: ${error.message || 'operation failed'}`);
+  showToast(TabOutProxyRouting.actionFeedback(null, error));
 }
 
 /**
@@ -927,7 +921,7 @@ function renderDomainCard(group) {
   }
 
   if (!isLanding && !group.label) {
-    actionsHtml += TabOutProxyRouting.quickAddButton(group.domain, proxyController.state().data?.rules || []);
+    actionsHtml += TabOutProxyRouting.quickAddButton(group.domain, proxyController.state());
   }
 
   return `
@@ -1149,7 +1143,7 @@ async function renderHistorySection() {
   domainsEl.innerHTML = domains.map(d => {
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${d.hostname}&sz=16`;
     // NOTE: 使用 target="_top" 保持与项目其他链接一致
-    const quickAdd = TabOutProxyRouting.quickAddButton(d.hostname, proxyController.state().data?.rules || []);
+    const quickAdd = TabOutProxyRouting.quickAddButton(d.hostname, proxyController.state());
     return `<span class="history-domain-entry"><a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
       <img class="history-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">
       <span>${d.friendlyName}</span>

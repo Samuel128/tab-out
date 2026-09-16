@@ -96,7 +96,7 @@ The provider remains separate from downloaded subscription files so subscription
 updates cannot erase the managed list.
 
 Corporate DNS routing remains in the merge override. In particular,
-`+.internal.example` and `+.corp.example` continue to use the company DNS servers rather
+`+.internal.example` and `+.corp.example` continue to use the internal DNS servers rather
 than public resolvers.
 
 ## Rule Model

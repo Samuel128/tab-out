@@ -91,7 +91,7 @@ class RuleTest < Minitest::Test
 
   def test_rejects_private_ip_and_short_keyword
     assert_raises(TabOutProxy::ValidationError) do
-      TabOutProxy::Rule.build(type: 'exact', value: '192.0.2.53')
+      TabOutProxy::Rule.build(type: 'exact', value: '172.31.1.10')
     end
     assert_raises(TabOutProxy::ValidationError) do
       TabOutProxy::Rule.build(type: 'keyword', value: 'ai')
@@ -923,7 +923,7 @@ Open a listed external domain and an unlisted domain. Inspect Clash connections
 or logs.
 
 Expected: listed domain uses `PROXY`; unlisted domain uses `DIRECT`; `.internal.example`,
-`.corp.example`, `dawn`, and `internal-assistant` remain direct and company DNS policy remains
+`.corp.example`, `internal-agent`, and `internal-assistant` remain direct and company DNS policy remains
 present.
 
 - [ ] **Step 6: Verify offline and rollback behavior**

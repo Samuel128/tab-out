@@ -1,0 +1,6 @@
+direct_rules:
+  - PROCESS-NAME,internal-agent,DIRECT
+  - PROCESS-NAME,internal-assistant,DIRECT
+  - DOMAIN-SUFFIX,internal.example,DIRECT
+  - DOMAIN-SUFFIX,corp.example,DIRECT
+  - DOMAIN-SUFFIX,business.example,DIRECT

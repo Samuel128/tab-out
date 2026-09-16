@@ -95,6 +95,16 @@ ruby scripts/install-native-host --extension-path /absolute/path/to/extension
 
 The installer verifies that the extension manifest is named `Tab Out`, includes `nativeMessaging`, and has no `key`. It computes the ID from the absolute extension path passed to the installer and binds `allowed_origins` to **that one ID only**. Use the same path shown in Chrome if you load the extension through a symlink. It stages `native/bin/tab-out-proxy-host` and `native/lib` under `~/Library/Application Support/Tab Out Proxy/`, then atomically writes `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.samuel.tabout.proxy.json`. A cross-process lock serializes installations. Reinstalling keeps the old code and snapshots the existing registration until the new registration succeeds; if installation fails, it restores the previous code and registration bytes and permissions (or removes a failed first install). Saved proxy rules and other managed data in `~/Library/Application Support/Tab Out Proxy/` are never part of this replacement. No service or TCP port is opened.
 
+Before using proxy routing, create `~/Library/Application Support/Tab Out Proxy/private-routing.yaml` outside the repository. It must be owned by your account and have mode `0600`. List your own `PROCESS-NAME` and `DOMAIN-SUFFIX` direct rules, for example:
+
+```yaml
+direct_rules:
+  - PROCESS-NAME,internal-agent,DIRECT
+  - DOMAIN-SUFFIX,internal.example,DIRECT
+```
+
+Run `chmod 600 "$HOME/Library/Application Support/Tab Out Proxy/private-routing.yaml"` after creating it. The host refuses to route without a valid private file. Its domain suffixes protect the native rule store and are returned to the extension at runtime to hide quick-add buttons; the file and its real values must never be committed. Existing Clash DNS policy stays in your local Clash configuration.
+
 Before opening Tab Out with the host installed, back up your Clash configuration and review the requested domain matches. The current extension sends a `status` request when a new tab opens, and the host may synchronize its managed rules and Clash profile at that point. The **installer itself** never sends `status` or contacts Clash. When ready to activate, reload Tab Out at `chrome://extensions` and open a new tab; then check the Proxy routing status shown on the page.
 
 To roll back the host registration and installed code:
@@ -130,7 +140,11 @@ RULE-SET,need-proxy,PROXY       # domains managed in Tab Out
 MATCH,DIRECT                    # fallback after the remaining direct rules
 ```
 
-Known internal domains have separate `DIRECT` rules ahead of the Tab Out list. The `*.example` names above are illustrative placeholders, not configured rules. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
+Known internal domains have separate `DIRECT` rules from the local private file ahead of the Tab Out list. The `*.example` names above are illustrative placeholders, not configured rules. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
+
+### Privacy check before commits
+
+Create `.git/tab-out-sensitive-patterns` with one case-insensitive regular expression per line for private company names, domains, and email identifiers. This file stays outside version control. Then run `git config --local core.hooksPath .githooks`. The hook scans the entire staged repository snapshot and the Git author/committer identity; it blocks changed binary files pending manual review. Existing tracked sensitive text blocks all new commits until removed. New clones must set up their own private patterns and enable the hook. The check cannot identify undisclosed company terms automatically; review changes manually too. Existing public Git history is **not** scrubbed by this check.
 
 ---
 
@@ -233,6 +247,16 @@ ruby scripts/install-native-host --extension-path /absolute/path/to/extension
 
 安装器会检查扩展名称、权限，并确认 Manifest 未设置 <code>key</code>；只有指定路径对应的扩展 ID 能连接本地助手。如果通过符号链接加载扩展，安装时应使用 Chrome 中显示的同一路径。安装器会把可执行文件和 Ruby 代码暂存到 <code>~/Library/Application Support/Tab Out Proxy/</code>，再原子写入 Chrome 的 Native Messaging 注册文件。跨进程锁可避免同时安装；重新安装失败时会恢复先前的代码与注册配置。已有代理规则数据不参与替换，也不会开启服务或 TCP 端口。
 
+使用代理分流前，在仓库外创建 <code>~/Library/Application Support/Tab Out Proxy/private-routing.yaml</code>，由当前用户持有并设置权限为 <code>0600</code>。填入自己的进程和域名直连规则，例如：
+
+~~~yaml
+direct_rules:
+  - PROCESS-NAME,internal-agent,DIRECT
+  - DOMAIN-SUFFIX,internal.example,DIRECT
+~~~
+
+创建后运行 <code>chmod 600 "$HOME/Library/Application Support/Tab Out Proxy/private-routing.yaml"</code>。缺少有效私有文件时，助手会拒绝分流。文件中的域名后缀既保护本地规则库，也会在运行时告知扩展隐藏对应的“添加代理”按钮；不要把实际值提交到仓库。已有的 Clash DNS 策略仍保留在本机 Clash 配置中。
+
 在安装助手后首次打开 Tab Out 之前，请备份 Clash 配置并检查准备添加的域名。扩展在打开新标签页时发送 <code>status</code> 请求，助手可能在此时同步它管理的规则与 Clash 配置；**安装器本身不会**发送该请求或连接 Clash。准备启用时，在 <code>chrome://extensions</code> 重新加载扩展并打开新标签页，检查“代理分流”的状态。
 
 如需卸载助手的注册信息与代码：
@@ -268,7 +292,11 @@ RULE-SET,need-proxy,PROXY               # Tab Out 管理的代理名单
 MATCH,DIRECT                            # 剩余直连规则之后的兜底
 ~~~
 
-上面的 <code>*.example</code> 是占位示例，不是实际配置。内网域名有独立的 <code>DIRECT</code> 规则，排在 Tab Out 名单之前。从 Tab Out 删除域名只会让它恢复直连，**不会**封禁网站。开启 macOS 系统代理时，请求也可能先进入本机 Clash，再由 <code>DIRECT</code> 直连出站；如果要让未列入名单的域名完全绕过 Clash，需要另行配置 PAC 或系统代理。
+上面的 <code>*.example</code> 是占位示例，不是实际配置。内网域名从本机私有文件读取，形成排在 Tab Out 名单之前的 <code>DIRECT</code> 规则。从 Tab Out 删除域名只会让它恢复直连，**不会**封禁网站。开启 macOS 系统代理时，请求也可能先进入本机 Clash，再由 <code>DIRECT</code> 直连出站；如果要让未列入名单的域名完全绕过 Clash，需要另行配置 PAC 或系统代理。
+
+### 提交前隐私检查
+
+在本地 `.git/tab-out-sensitive-patterns` 中逐行写入公司名称、域名和邮箱标识的正则表达式（不区分大小写），不要提交这个私有文件。再运行 `git config --local core.hooksPath .githooks` 启用钩子。钩子会扫描整个暂存区快照和 Git 作者/提交者身份；新增或修改的二进制文件也会拦下，等待人工检查。仓库中已有的敏感文本会持续阻止提交，直到清理完毕。新克隆的仓库需要自行配置私有词表并启用钩子。未知的公司信息无法自动识别，提交前仍需人工核对；此检查**不会**清除既有的公开 Git 历史。
 
 ### 技术栈
 

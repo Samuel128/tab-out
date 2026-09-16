@@ -60,7 +60,7 @@ class RuleTest < Minitest::Test
 
   def test_rejects_localhost_private_and_link_local_targets
     %w[
-      localhost sub.localhost 127.0.0.1 10.2.3.4 192.0.2.53
+      localhost sub.localhost 127.0.0.1 10.2.3.4 172.31.1.10
       192.168.1.20 169.254.2.3 ::1 fe80::1 fc00::1
     ].each do |target|
       assert_rule_error('private_target', type: 'exact', value: target)
@@ -68,7 +68,7 @@ class RuleTest < Minitest::Test
   end
 
   def test_rejects_corporate_targets_for_all_match_types
-    %w[internal.example app.internal.example corp.example api.llm.prd.corp.example].each do |target|
+    %w[internal.example app.internal.example corp.example api.corp.example].each do |target|
       %w[suffix keyword exact].each do |type|
         assert_rule_error('corporate_target', type: type, value: target)
       end
@@ -76,19 +76,19 @@ class RuleTest < Minitest::Test
   end
 
   def test_rejects_keywords_that_can_match_protected_corporate_targets
-    %w[internal hww corp yum].each do |keyword|
+    %w[internal inte corp cor].each do |keyword|
       assert_rule_error('corporate_target', type: 'keyword', value: keyword)
     end
   end
 
   def test_rejects_original_keyword_examples_containing_protected_corporate_labels
-    %w[app.internal prd.corp].each do |keyword|
+    %w[app.internal api.corp].each do |keyword|
       assert_rule_error('corporate_target', type: 'keyword', value: keyword)
     end
   end
 
   def test_rejects_business_domain_and_subdomains_for_suffix_and_exact
-    %w[business.example intranet.business.example api.prd.business.example].each do |domain|
+    %w[business.example intranet.business.example api.business.example].each do |domain|
       %w[suffix exact].each do |type|
         assert_rule_error('corporate_target', type: type, value: domain)
       end
@@ -96,7 +96,7 @@ class RuleTest < Minitest::Test
   end
 
   def test_rejects_keywords_matching_business_labels_and_fragments
-    %w[business corphin china prd.business intranet.business].each do |keyword|
+    %w[business busine siness api.business intranet.business].each do |keyword|
       assert_rule_error('corporate_target', type: 'keyword', value: keyword)
     end
   end

@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ProxyRouting = require('../extension/proxy-routing.js');
+const PRIVATE_SUFFIXES = ['internal.example', 'corp.example', 'business.example'];
 
 test('native adapter sends only versioned allowlisted commands to fixed host', async () => {
   const calls = [];
@@ -92,12 +93,12 @@ test('manual add explicitly transitions first-run routing from inactive to activ
 test('quick add accepts only public HTTP(S) hostnames', () => {
   assert.equal(ProxyRouting.quickAddHost('https://Docs.Example.com/path'), 'docs.example.com');
   assert.equal(ProxyRouting.quickAddHost('http://localhost:3000'), null);
-  assert.equal(ProxyRouting.quickAddHost('https://app.internal.example/a'), null);
-  assert.equal(ProxyRouting.quickAddHost('https://api.corp.example'), null);
-  assert.equal(ProxyRouting.quickAddHost('https://business.example'), null);
-  assert.equal(ProxyRouting.quickAddHost('https://intranet.business.example/dashboard'), null);
-  assert.equal(ProxyRouting.quickAddHost('https://notbusiness.example'), 'notbusiness.example');
-  assert.equal(ProxyRouting.quickAddHost('https://business.example.evil.net'), 'business.example.evil.net');
+  assert.equal(ProxyRouting.quickAddHost('https://app.internal.example/a', PRIVATE_SUFFIXES), null);
+  assert.equal(ProxyRouting.quickAddHost('https://api.corp.example', PRIVATE_SUFFIXES), null);
+  assert.equal(ProxyRouting.quickAddHost('https://business.example', PRIVATE_SUFFIXES), null);
+  assert.equal(ProxyRouting.quickAddHost('https://intranet.business.example/dashboard', PRIVATE_SUFFIXES), null);
+  assert.equal(ProxyRouting.quickAddHost('https://notbusiness.example', PRIVATE_SUFFIXES), 'notbusiness.example');
+  assert.equal(ProxyRouting.quickAddHost('https://business.example.evil.net', PRIVATE_SUFFIXES), 'business.example.evil.net');
   assert.equal(ProxyRouting.quickAddHost('http://192.168.1.2'), null);
   assert.equal(ProxyRouting.quickAddHost('http://10.1.2.3'), null);
   assert.equal(ProxyRouting.quickAddHost('http://172.31.8.1'), null);
@@ -141,7 +142,7 @@ test('known company domains are hard-blocked before confirmation and add', async
   const confirm = async () => { confirms += 1; return true; };
   const add = async () => { adds += 1; };
   for (const host of ['business.example', 'intranet.business.example', 'app.internal.example', 'api.corp.example']) {
-    assert.equal(await ProxyRouting.confirmedQuickAdd(host, confirm, add), null);
+    assert.equal(await ProxyRouting.confirmedQuickAdd(host, confirm, add, PRIVATE_SUFFIXES), null);
   }
   assert.equal(confirms, 0);
   assert.equal(adds, 0);
@@ -360,9 +361,9 @@ test('manifest adds only nativeMessaging without removing old permissions', () =
 
 test('quick-add markup is absent for synthetic or company hosts and marks covered suffixes', () => {
   assert.equal(ProxyRouting.quickAddButton('__landing-pages__', []), '');
-  assert.equal(ProxyRouting.quickAddButton('app.internal.example', []), '');
-  assert.equal(ProxyRouting.quickAddButton('business.example', { data: { status: 'active', rules: [] } }), '');
-  assert.equal(ProxyRouting.quickAddButton('intranet.business.example', { data: { status: 'active', rules: [] } }), '');
+  assert.equal(ProxyRouting.quickAddButton('app.internal.example', { data: { protectedSuffixes: PRIVATE_SUFFIXES, rules: [] } }), '');
+  assert.equal(ProxyRouting.quickAddButton('business.example', { data: { protectedSuffixes: PRIVATE_SUFFIXES, status: 'active', rules: [] } }), '');
+  assert.equal(ProxyRouting.quickAddButton('intranet.business.example', { data: { protectedSuffixes: PRIVATE_SUFFIXES, status: 'active', rules: [] } }), '');
   assert.equal(ProxyRouting.quickAddButton('localhost', []), '');
   const add = ProxyRouting.quickAddButton('docs.example.com', { data: { status: 'active', rules: [] } });
   assert.match(add, /data-action="proxy-quick-add"/);

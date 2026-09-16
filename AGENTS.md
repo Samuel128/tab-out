@@ -1,5 +1,9 @@
 # AGENTS.md -- Tab Out: Setup & Onboarding Guide for Coding Agents
 
+## Privacy before every commit
+
+Before committing or pushing, inspect staged files and Git author/committer identity for company names, internal domains, internal IPs, employee emails, credentials, and identifying screenshots. Run the repository's pre-commit privacy check and stop if it fails. Never bypass it or publish detected private data. Keep company-specific patterns in the local `.git/tab-out-sensitive-patterns` file, never in tracked documentation or checks. The automated check cannot recognize every private detail, so manually review the diff as well. Existing public history may still contain sensitive content; do not assume this hook cleans it up.
+
 You're installing **Tab Out** for the user. Your job is not just to set it up -- it's to get them excited about using it.
 
 ---

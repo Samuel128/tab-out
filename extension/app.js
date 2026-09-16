@@ -1371,7 +1371,8 @@ document.addEventListener('click', async (e) => {
         const data = await TabOutProxyRouting.confirmedQuickAdd(
           actionEl.dataset.proxyDomain || '',
           confirmProxyQuickAdd,
-          host => proxyController.add('suffix', host)
+          host => proxyController.add('suffix', host),
+          proxyController.state().data?.protectedSuffixes || []
         );
         if (data) proxyActionToast(data);
         return;

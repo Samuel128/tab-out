@@ -5,6 +5,7 @@ require 'ipaddr'
 require 'time'
 require 'uri'
 require_relative 'errors'
+require_relative 'private_routing'
 
 module TabOutProxy
   class Rule
@@ -13,8 +14,6 @@ module TabOutProxy
       'keyword' => 'DOMAIN-KEYWORD',
       'exact' => 'DOMAIN'
     }.freeze
-    CORPORATE_SUFFIXES = %w[internal.example corp.example business.example].freeze
-    CORPORATE_KEYWORD_MARKERS = %w[internal corp business].freeze
     PUBLIC_SUFFIX_ONLY = %w[
       com net org edu gov mil int io ai app dev cloud xyz top
       cn com.cn net.cn org.cn uk co.uk jp co.jp local
@@ -108,11 +107,11 @@ module TabOutProxy
 
     def corporate_target?
       if type == 'keyword'
-        CORPORATE_KEYWORD_MARKERS.any? do |marker|
+        PrivateRouting.keyword_markers.any? do |marker|
           marker.include?(value) || value.include?(marker)
         end
       else
-        CORPORATE_SUFFIXES.any? { |suffix| value == suffix || value.end_with?(".#{suffix}") }
+        PrivateRouting.domain_suffixes.any? { |suffix| value == suffix || value.end_with?(".#{suffix}") }
       end
     end
 

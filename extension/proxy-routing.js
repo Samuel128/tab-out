@@ -75,7 +75,7 @@ const TabOutProxyRouting = (() => {
     });
   }
 
-  function quickAddHost(url) {
+  function quickAddHost(url, protectedSuffixes = []) {
     let parsed;
     try { parsed = new URL(url); } catch { return null; }
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
@@ -83,12 +83,12 @@ const TabOutProxyRouting = (() => {
     if (!host.includes('.') || host.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return null;
     if (!host.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label))) return null;
     if (['localhost', 'local', 'internal', 'invalid', 'test'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
-    if (['internal.example', 'corp.example', 'business.example'].some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
+    if (protectedSuffixes.some(suffix => host === suffix || host.endsWith(`.${suffix}`))) return null;
     return host;
   }
 
-  async function confirmedQuickAdd(host, confirm, add) {
-    const eligible = quickAddHost(`https://${host}`);
+  async function confirmedQuickAdd(host, confirm, add, protectedSuffixes = []) {
+    const eligible = quickAddHost(`https://${host}`, protectedSuffixes);
     if (!eligible) return null;
     const approved = await confirm(eligible, tr('This is not a company/internal domain'));
     if (approved !== true) return null;
@@ -153,7 +153,7 @@ const TabOutProxyRouting = (() => {
   }
 
   function quickAddButton(host, state) {
-    const eligible = quickAddHost(`https://${host}`);
+    const eligible = quickAddHost(`https://${host}`, state?.data?.protectedSuffixes || []);
     if (!eligible) return '';
     const presentation = quickAddPresentation(eligible, state);
     return `<button type="button" class="proxy-quick-add${presentation.modifier ? ` ${presentation.modifier}` : ''}" data-action="proxy-quick-add" data-proxy-domain="${escapeHtml(eligible)}" ${presentation.disabled ? 'disabled' : ''} title="${escapeHtml(tr(presentation.title))}" aria-label="${escapeHtml(tr(presentation.label))} ${escapeHtml(eligible)}">${escapeHtml(tr(presentation.label))}</button>`;

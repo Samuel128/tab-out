@@ -4,16 +4,10 @@ require 'fileutils'
 require 'yaml'
 require_relative 'atomic_file'
 require_relative 'errors'
+require_relative 'private_routing'
 
 module TabOutProxy
   class ProfileManager
-    CORPORATE_RULES = [
-      'PROCESS-NAME,internal-agent,DIRECT',
-      'PROCESS-NAME,internal-assistant,DIRECT',
-      'DOMAIN-SUFFIX,internal.example,DIRECT',
-      'DOMAIN-SUFFIX,corp.example,DIRECT',
-      'DOMAIN-SUFFIX,business.example,DIRECT'
-    ].freeze
     PROVIDER_RULE = 'RULE-SET,need-proxy,PROXY'
     SOURCE_TERMINAL = 'MATCH,PROXY'
     TARGET_TERMINAL = 'MATCH,DIRECT'
@@ -186,7 +180,7 @@ module TabOutProxy
       prepend = array_of_strings(rules['prepend'], 'rules_override_invalid')
       delete = array_of_strings(rules['delete'], 'rules_override_invalid')
       append = array_of_strings(rules['append'], 'rules_override_invalid')
-      managed = CORPORATE_RULES + [PROVIDER_RULE]
+      managed = PrivateRouting.direct_rules + [PROVIDER_RULE]
 
       rules['prepend'] = managed + prepend.reject do |rule|
         managed.include?(rule) || terminal_rule?(rule)
@@ -207,7 +201,7 @@ module TabOutProxy
       validate_managed_provider!(providers)
       providers['need-proxy'] = provider_definition
 
-      managed = CORPORATE_RULES + [PROVIDER_RULE]
+      managed = PrivateRouting.direct_rules + [PROVIDER_RULE]
       preserved = active.fetch('rules').reject do |rule|
         managed.include?(rule) || rule.match?(/\AMATCH,/)
       end

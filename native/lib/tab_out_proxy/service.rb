@@ -2,6 +2,7 @@
 
 require 'time'
 require_relative 'errors'
+require_relative 'private_routing'
 
 module TabOutProxy
   class Service
@@ -149,6 +150,7 @@ module TabOutProxy
         'protocolVersion' => PROTOCOL_VERSION,
         'status' => status,
         'rules' => @store.list.map(&:to_h),
+        'protectedSuffixes' => PrivateRouting.domain_suffixes,
         'profile' => profile && public_profile(profile),
         'syncedAt' => synced_at
       }

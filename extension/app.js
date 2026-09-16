@@ -1005,6 +1005,106 @@ function renderArchiveItem(item) {
 
 
 /* ----------------------------------------------------------------
+   HISTORY DOMAINS—展示访问过的历史域名
+
+   使用 chrome.history API 查询近期访问记录，
+   按域名去重后展示在页面最底部。
+   已在『当前打开』区块展示的域名不重复列出。
+   ---------------------------------------------------------------- */
+
+/**
+ * getHistoryDomains()
+ *
+ * 查询近 30 天内的浏览历史，提取唯一 hostname。
+ * 已在当前标签页组中显示的域名不重复列出。
+ * 返回按最新访问时间排序的 { hostname, friendlyName, rootUrl }[] 。
+ */
+async function getHistoryDomains() {
+  try {
+    // 查询近30天内的历史，最多取 1000 条
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const items = await chrome.history.search({
+      text:       '',
+      startTime:  thirtyDaysAgo,
+      maxResults: 1000,
+    });
+
+    // 收集当前已打开的域名，避免与上方卡片重复
+    const openDomains = new Set(
+      getRealTabs().map(t => {
+        try { return new URL(t.url).hostname; } catch { return null; }
+      }).filter(Boolean)
+    );
+
+    const seen    = new Set();
+    const results = [];
+
+    for (const item of items) {
+      const url = item.url || '';
+      // 跳过浏览器内部页面、扩展页面、本地文件
+      if (
+        url.startsWith('chrome://') ||
+        url.startsWith('chrome-extension://') ||
+        url.startsWith('about:') ||
+        url.startsWith('file://')
+      ) continue;
+
+      let hostname;
+      try { hostname = new URL(url).hostname; } catch { continue; }
+      if (!hostname) continue;
+
+      // 已展示过（当前已打开 或 历史列表已有）则跳过
+      if (seen.has(hostname) || openDomains.has(hostname)) continue;
+
+      seen.add(hostname);
+      results.push({
+        hostname,
+        friendlyName: friendlyDomain(hostname),
+        rootUrl:      `https://${hostname}`,
+      });
+    }
+
+    return results;
+  } catch {
+    // chrome.history API 不可用时静默失败
+    return [];
+  }
+}
+
+/**
+ * renderHistorySection()
+ *
+ * 读取历史域名并渲染底部『曾经访问』区块。
+ * 每个域名一个小胖，点击在当前标签页内跳转到该域名首页。
+ */
+async function renderHistorySection() {
+  const section   = document.getElementById('historySection');
+  const domainsEl = document.getElementById('historyDomains');
+  const countEl   = document.getElementById('historySectionCount');
+  if (!section || !domainsEl) return;
+
+  const domains = await getHistoryDomains();
+
+  if (domains.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  if (countEl) countEl.textContent = `${domains.length} domain${domains.length !== 1 ? 's' : ''}`;
+
+  domainsEl.innerHTML = domains.map(d => {
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${d.hostname}&sz=16`;
+    // NOTE: 使用 target="_top" 保持与项目其他链接一致
+    return `<a class="history-domain-chip" href="${d.rootUrl}" target="_top" rel="noopener" title="${d.hostname}">
+      <img class="history-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">
+      <span>${d.friendlyName}</span>
+    </a>`;
+  }).join('');
+}
+
+
+/* ----------------------------------------------------------------
    MAIN DASHBOARD RENDERER
    ---------------------------------------------------------------- */
 
@@ -1164,8 +1264,11 @@ async function renderStaticDashboard() {
   // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
 
-  // --- Render "Saved for Later" column ---
+  // --- 渲染『已保存』列 ---
   await renderDeferredColumn();
+
+  // --- 渲染底部『曾经访问』历史域名区块 ---
+  await renderHistorySection();
 }
 
 async function renderDashboard() {

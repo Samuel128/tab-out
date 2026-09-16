@@ -97,6 +97,20 @@
   </div><!-- end .dashboard-columns -->
 
   <!-- ================================================================
+       HISTORY SECTION — 底部：访问过的历史域名
+       每个域名显示一次，点击进入该域名首页
+       由 renderHistorySection() in app.js 控制显隐
+       ================================================================ -->
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="section-header">
+      <h2>Recently visited</h2>
+      <div class="section-line"></div>
+      <div class="section-count" id="historySectionCount"></div>
+    </div>
+    <div class="history-domains" id="historyDomains"></div>
+  </div>
+
+  <!-- ================================================================
        FOOTER — global stats + refresh control
        ================================================================ -->
   <footer>
@@ -107,7 +121,7 @@
       </div>
     </div>
     <div class="last-refresh">
-      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a></span>
+      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a> &middot; forked by Samuel</span>
     </div>
   </footer>
 

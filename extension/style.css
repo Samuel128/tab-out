@@ -1156,3 +1156,68 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   opacity: 0.6;
   flex-shrink: 0;
 }
+
+
+/* ================================================================
+   HISTORY SECTION — 底部：曾经访问的历史域名
+   风格与页面其他区块保持一致（暖纸色调 + 琥珀交互）
+   ================================================================ */
+
+.history-section {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--warm-gray);
+  animation: fadeUp 0.5s ease 0.5s both;
+}
+
+/* 域名 chip 容器：自动换行的弹性布局 */
+.history-domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 单个域名 chip：胶囊形状，含 favicon + 域名文字 */
+.history-domain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 5px 12px 5px 8px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 20px;
+  background: var(--card-bg);
+
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+
+  transition: border-color 0.2s, color 0.2s, background 0.2s,
+              transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.history-domain-chip:hover {
+  border-color: var(--accent-amber);
+  color: var(--ink);
+  background: rgba(200, 113, 58, 0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+/* chip 内的小 favicon */
+.history-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.history-domain-chip:hover .history-favicon {
+  opacity: 1;
+}

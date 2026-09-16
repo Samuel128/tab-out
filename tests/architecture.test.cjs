@@ -17,18 +17,21 @@ test('proxy routing opens a bundled architecture page', () => {
   assert.match(page, /src="architecture\.js"/);
   assert.match(page, /RULE-SET,need-proxy,PROXY/);
   assert.match(page, /MATCH,DIRECT/);
-  assert.match(page, /internal\.com/);
+  assert.match(page, /internal\.example/);
+  assert.doesNotMatch(page, /internal|business|corp\.local/i);
   assert.match(page, /tab-out-need-proxy\.yaml/);
   assert.match(page, /state\.json/);
-  assert.match(page, /DOMAIN-SUFFIX,chatgpt\.com/);
+  assert.match(page, /DOMAIN-SUFFIX,ai\.example/);
   assert.match(page, /rule-providers/);
   assert.match(page, /chrome\.runtime\.sendNativeMessage/);
 });
 
 test('architecture page follows the stored dashboard language', () => {
   const script = extensionFile('architecture.js');
+  const translations = extensionFile('i18n.js');
   assert.match(script, /chrome\.storage\.local\.get\('language'\)/);
   assert.match(script, /chrome\.storage\.local\.set\(\{ language:/);
+  assert.doesNotMatch(translations, /internal|business|corp\.local/i);
   i18n.setLanguage('zh');
   assert.notEqual(i18n.t('Routing architecture'), 'Routing architecture');
   i18n.setLanguage('en');

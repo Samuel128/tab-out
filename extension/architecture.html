@@ -60,7 +60,7 @@
             <p data-i18n="The helper turns each match type into a Clash rule. This is an example, not your current live list.">The helper turns each match type into a Clash rule. This is an example, not your current live list.</p>
             <code class="handoff-path">tab-out-need-proxy.yaml</code>
             <pre><code>payload:
-  - DOMAIN-SUFFIX,chatgpt.com</code></pre>
+  - DOMAIN-SUFFIX,ai.example</code></pre>
           </article>
           <article class="handoff-card">
             <span class="handoff-kicker">03 / YAML → Clash</span>
@@ -82,7 +82,7 @@ rules:
       <section class="content-section decisions" aria-labelledby="decisionTitle">
         <div class="section-intro"><p class="eyebrow">03 / <span data-i18n="Decision path">Decision path</span></p><h2 id="decisionTitle" data-i18n="First matching rule wins.">First matching rule wins.</h2></div>
         <div class="decision-list">
-          <article class="decision-row"><span class="decision-index">01</span><div><h3 data-i18n="Company traffic stays direct">Company traffic stays direct</h3><p data-i18n="Protected process names and known company domains, including internal.example, are placed before the proxy list.">Protected process names and known company domains, including internal.example, are placed before the proxy list.</p></div><code>DOMAIN-SUFFIX,internal.example,DIRECT</code></article>
+          <article class="decision-row"><span class="decision-index">01</span><div><h3 data-i18n="Company traffic stays direct">Company traffic stays direct</h3><p data-i18n="Protected process names and known internal domains are placed before the proxy list. This domain is an example, not a live rule.">Protected process names and known internal domains are placed before the proxy list. This domain is an example, not a live rule.</p></div><code>DOMAIN-SUFFIX,internal.example,DIRECT</code></article>
           <article class="decision-row is-proxy"><span class="decision-index">02</span><div><h3 data-i18n="Your list goes to PROXY">Your list goes to PROXY</h3><p data-i18n="The need-proxy provider contains the domains you manage in Tab Out. Its match types become DOMAIN-SUFFIX, DOMAIN, or DOMAIN-KEYWORD rules.">The need-proxy provider contains the domains you manage in Tab Out. Its match types become DOMAIN-SUFFIX, DOMAIN, or DOMAIN-KEYWORD rules.</p></div><code>RULE-SET,need-proxy,PROXY</code></article>
           <article class="decision-row"><span class="decision-index">03</span><div><h3 data-i18n="Everything else goes direct">Everything else goes direct</h3><p data-i18n="If no earlier rule matches, Clash uses DIRECT. Removing a domain from Tab Out does not block the site; it returns to direct routing.">If no earlier rule matches, Clash uses DIRECT. Removing a domain from Tab Out does not block the site; it returns to direct routing.</p></div><code>MATCH,DIRECT</code></article>
         </div>

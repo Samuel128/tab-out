@@ -7,6 +7,7 @@ const {
   getRealTabs,
   getGroupStats,
   createDebouncedTask,
+  OPEN_TABS_REFRESH_DELAY_MS,
 } = require('../extension/tab-state.js');
 
 test('isRealTab accepts regular web pages and rejects browser pages', () => {
@@ -75,6 +76,13 @@ test('createDebouncedTask coalesces rapid calls into one execution', async () =>
   await new Promise(resolve => setTimeout(resolve, 30));
 
   assert.equal(calls, 1);
+});
+
+test('live refresh waits for sequential chip and card exit animations', () => {
+  const longestExitSequenceMs = 200 + 300;
+
+  assert.ok(OPEN_TABS_REFRESH_DELAY_MS > longestExitSequenceMs);
+  assert.ok(OPEN_TABS_REFRESH_DELAY_MS <= 600);
 });
 
 test('bindTabRefreshListeners registers created, removed, and updated events', () => {

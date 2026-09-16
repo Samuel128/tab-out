@@ -1270,7 +1270,7 @@ const scheduleOpenTabsRefresh = TabOutTabState.createDebouncedTask(() => {
   renderOpenTabsSection().catch(error => {
     console.warn('[tab-out] Failed to refresh open tabs:', error);
   });
-}, 120);
+}, TabOutTabState.OPEN_TABS_REFRESH_DELAY_MS);
 
 
 /* ----------------------------------------------------------------

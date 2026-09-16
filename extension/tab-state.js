@@ -5,6 +5,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.TabOutTabState = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createTabState() {
+  // A final chip can exit for 200ms before its empty card runs a 300ms exit.
+  const OPEN_TABS_REFRESH_DELAY_MS = 520;
+
   function isRealTab(tab) {
     const url = tab && tab.url ? tab.url : '';
     return ![
@@ -54,6 +57,7 @@
   }
 
   return {
+    OPEN_TABS_REFRESH_DELAY_MS,
     isRealTab,
     getRealTabs,
     getGroupStats,

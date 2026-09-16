@@ -81,6 +81,20 @@ class RuleTest < Minitest::Test
     end
   end
 
+  def test_rejects_original_keyword_examples_containing_protected_corporate_labels
+    %w[app.internal prd.corp].each do |keyword|
+      assert_rule_error('corporate_target', type: 'keyword', value: keyword)
+    end
+  end
+
+  def test_preserves_legitimate_keywords_without_protected_corporate_fragments
+    %w[openai google yummy hardware].each do |keyword|
+      rule = TabOutProxy::Rule.build(type: 'keyword', value: keyword)
+      assert_equal keyword, rule.value
+      assert_equal "DOMAIN-KEYWORD,#{keyword}", rule.provider_line
+    end
+  end
+
   def test_rejects_keywords_that_can_match_private_ip_fragments
     %w[192.168 172.31 172.16 169.254 127.0 10.0 fe80 fc00].each do |keyword|
       assert_rule_error('private_target', type: 'keyword', value: keyword)

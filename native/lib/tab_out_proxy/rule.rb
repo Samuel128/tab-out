@@ -14,6 +14,7 @@ module TabOutProxy
       'exact' => 'DOMAIN'
     }.freeze
     CORPORATE_SUFFIXES = %w[internal.example corp.example].freeze
+    CORPORATE_KEYWORD_MARKERS = %w[internal corp].freeze
     PUBLIC_SUFFIX_ONLY = %w[
       com net org edu gov mil int io ai app dev cloud xyz top
       cn com.cn net.cn org.cn uk co.uk jp co.jp local
@@ -107,7 +108,9 @@ module TabOutProxy
 
     def corporate_target?
       if type == 'keyword'
-        CORPORATE_SUFFIXES.any? { |suffix| suffix.include?(value) || value.include?(suffix) }
+        CORPORATE_KEYWORD_MARKERS.any? do |marker|
+          marker.include?(value) || value.include?(marker)
+        end
       else
         CORPORATE_SUFFIXES.any? { |suffix| value == suffix || value.end_with?(".#{suffix}") }
       end

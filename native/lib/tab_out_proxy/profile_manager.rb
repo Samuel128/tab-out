@@ -11,7 +11,8 @@ module TabOutProxy
       'PROCESS-NAME,internal-agent,DIRECT',
       'PROCESS-NAME,internal-assistant,DIRECT',
       'DOMAIN-SUFFIX,internal.example,DIRECT',
-      'DOMAIN-SUFFIX,corp.example,DIRECT'
+      'DOMAIN-SUFFIX,corp.example,DIRECT',
+      'DOMAIN-SUFFIX,business.example,DIRECT'
     ].freeze
     PROVIDER_RULE = 'RULE-SET,need-proxy,PROXY'
     SOURCE_TERMINAL = 'MATCH,PROXY'

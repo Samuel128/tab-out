@@ -10,7 +10,8 @@ class ProfileManagerTest < Minitest::Test
     'PROCESS-NAME,internal-agent,DIRECT',
     'PROCESS-NAME,internal-assistant,DIRECT',
     'DOMAIN-SUFFIX,internal.example,DIRECT',
-    'DOMAIN-SUFFIX,corp.example,DIRECT'
+    'DOMAIN-SUFFIX,corp.example,DIRECT',
+    'DOMAIN-SUFFIX,business.example,DIRECT'
   ].freeze
 
   def setup
@@ -66,6 +67,8 @@ class ProfileManagerTest < Minitest::Test
       'RULE-SET,need-proxy,PROXY',
       'DOMAIN-SUFFIX,existing.example,DIRECT'
     ], rules.fetch('prepend')
+    assert_operator rules.fetch('prepend').index('DOMAIN-SUFFIX,business.example,DIRECT'), :<,
+                    rules.fetch('prepend').index('RULE-SET,need-proxy,PROXY')
     assert_includes rules.fetch('delete'), 'DOMAIN-SUFFIX,obsolete.example,PROXY'
     assert_includes rules.fetch('delete'), 'MATCH,PROXY'
     assert_equal ['DOMAIN-SUFFIX,fallback.example,DIRECT', 'MATCH,DIRECT'], rules.fetch('append')
@@ -75,8 +78,10 @@ class ProfileManagerTest < Minitest::Test
     assert_equal true, active.dig('custom-active-key', 'preserved')
     assert_equal ['192.0.2.53'], active.dig('dns', 'nameserver-policy', '+.internal.example')
     assert_equal 'domain', active.dig('rule-providers', 'existing-provider', 'behavior')
-    assert_equal CORPORATE_RULES, active.fetch('rules').first(4)
-    assert_equal 'RULE-SET,need-proxy,PROXY', active.fetch('rules')[4]
+    assert_equal CORPORATE_RULES, active.fetch('rules').first(CORPORATE_RULES.length)
+    assert_operator active.fetch('rules').index('DOMAIN-SUFFIX,business.example,DIRECT'), :<,
+                    active.fetch('rules').index('RULE-SET,need-proxy,PROXY')
+    assert_equal 'RULE-SET,need-proxy,PROXY', active.fetch('rules')[CORPORATE_RULES.length]
     assert_includes active.fetch('rules'), 'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve'
     assert_equal 'MATCH,DIRECT', active.fetch('rules').last
     refute_includes active.fetch('rules'), 'MATCH,PROXY'

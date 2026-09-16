@@ -33,11 +33,26 @@ class StoreTest < Minitest::Test
 
     @store.ensure_initialized
 
-    assert_equal({ 'version' => 1, 'rules' => [] }, JSON.parse(first_state))
+    assert_equal({ 'version' => 1, 'synced' => false, 'rules' => [] }, JSON.parse(first_state))
     assert_equal({ 'payload' => [] }, YAML.safe_load(first_provider))
     assert_equal first_state, File.binread(@store.state_path)
     assert_equal first_provider, File.binread(@store.provider_path)
     refute File.exist?("#{@store.state_path}.bak")
+  end
+
+  def test_initial_list_is_read_only_and_sync_marker_resets_on_change
+    refute @store.initialized?
+    assert_empty @store.list
+    refute File.exist?(@store.state_path)
+    refute File.exist?(File.join(@directory, '.lock'))
+
+    @store.add(type: 'suffix', value: 'openai.com')
+    assert @store.initialized?
+    refute @store.synced?
+    @store.mark_synced!
+    assert @store.synced?
+    @store.add(type: 'keyword', value: 'google')
+    refute @store.synced?
   end
 
   def test_ensure_initialized_repairs_provider_from_authoritative_json

@@ -31,7 +31,38 @@ module TabOutProxy
     end
 
     def list
+      return [] unless File.exist?(state_path)
+
       with_lock { load_rules }
+    end
+
+    def initialized?
+      File.exist?(state_path)
+    end
+
+    def synced?
+      return false unless initialized?
+
+      with_lock do
+        state = JSON.parse(File.binread(state_path))
+        parse_state(JSON.generate(state))
+        state['synced'] == true
+      end
+    rescue JSON::ParserError
+      raise PersistenceError.new('invalid_state', 'Rule state is not valid JSON rule data')
+    end
+
+    def mark_synced!
+      with_lock do
+        state = JSON.parse(File.binread(state_path))
+        parse_state(JSON.generate(state))
+        return if state['synced'] == true
+
+        state['synced'] = true
+        AtomicFile.write(state_path, JSON.pretty_generate(state) + "\n")
+      end
+    rescue JSON::ParserError
+      raise PersistenceError.new('invalid_state', 'Rule state is not valid JSON rule data')
     end
 
     def ensure_initialized
@@ -144,6 +175,7 @@ module TabOutProxy
     def persist(rules)
       state = JSON.pretty_generate(
         'version' => VERSION,
+        'synced' => false,
         'rules' => rules.map(&:to_h)
       ) + "\n"
       provider = provider_content(rules)

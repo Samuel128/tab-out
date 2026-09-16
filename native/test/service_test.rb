@@ -117,6 +117,49 @@ class ServiceTest < Minitest::Test
     ], @client.calls
   end
 
+  def test_first_run_status_and_list_do_not_create_state_or_touch_clash
+    before = profile_contents
+
+    %w[status list].each do |command|
+      result = @service.call(command)
+      assert_includes %w[inactive stored], result.fetch('status')
+      assert_empty result.fetch('rules')
+      assert_nil result.fetch('syncedAt')
+    end
+
+    refute File.exist?(@store.state_path)
+    refute File.exist?(@store.provider_path)
+    refute File.exist?(File.dirname(@store.state_path))
+    assert_equal before, profile_contents
+    assert_empty @client.calls
+  end
+
+  def test_status_after_verified_activation_does_not_reload_unchanged_config
+    @service.call('add', 'type' => 'suffix', 'value' => 'openai.com')
+    @client.calls.clear
+
+    result = @service.call('status')
+
+    assert_equal 'active', result.fetch('status')
+    refute_includes @client.calls.map(&:first), :reload_config
+    refute_includes @client.calls.map(&:first), :refresh_provider
+  end
+
+  def test_status_reloads_when_previously_verified_provider_is_unavailable
+    @service.call('add', 'type' => 'suffix', 'value' => 'openai.com')
+    @client.calls.clear
+    @client.fail_next(
+      :provider,
+      TabOutProxy::SyncError.new('clash_http_error', 'HTTP 404')
+    )
+
+    result = @service.call('status')
+
+    assert_equal 'active', result.fetch('status')
+    assert_includes @client.calls.map(&:first), :reload_config
+    assert_includes @client.calls.map(&:first), :refresh_provider
+  end
+
   def test_offline_add_retains_valid_files_as_pending
     @client.online = false
 

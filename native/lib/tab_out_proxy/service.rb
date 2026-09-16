@@ -21,8 +21,12 @@ module TabOutProxy
 
       case command
       when 'status'
+        return response('inactive', nil, nil) unless @store.initialized?
+
         with_transaction_lock { synchronize_transaction }
       when 'list'
+        return response('stored', nil, nil) unless @store.initialized?
+
         with_transaction_lock do
           response('stored', @profile_manager.profile_info, nil)
         end
@@ -53,7 +57,7 @@ module TabOutProxy
       profile_snapshot = @profile_manager.snapshot
       @store.ensure_initialized
       yield if block_given?
-      synchronize
+      synchronize(store_snapshot, profile_snapshot)
     rescue ClashUnavailableError
       # A socket can disappear between availability and reload. The valid files
       # remain in place so a later status request can finish synchronization.
@@ -67,10 +71,16 @@ module TabOutProxy
       raise SyncError.new('sync_failed', "Proxy synchronization failed: #{error.class}")
     end
 
-    def synchronize
+    def synchronize(store_snapshot, profile_snapshot)
       integration = @profile_manager.ensure_integrated!
       profile = public_profile(integration)
       return response('pending', profile, nil) unless @mihomo_client.available?
+
+      unchanged = @store.synced? && @store.snapshot == store_snapshot &&
+                  @profile_manager.snapshot == profile_snapshot
+      if unchanged && provider_already_healthy?
+        return response('active', profile, @clock.call.utc.iso8601)
+      end
 
       @mihomo_client.reload_config(@profile_manager.active_config_path)
       @mihomo_client.refresh_provider('need-proxy')
@@ -78,6 +88,8 @@ module TabOutProxy
       unless healthy_provider?(provider)
         raise SyncError.new('provider_verification_failed', 'Clash did not verify the need-proxy provider')
       end
+
+      @store.mark_synced!
 
       response('active', profile, @clock.call.utc.iso8601)
     end
@@ -102,6 +114,12 @@ module TabOutProxy
         provider['vehicleType'] == 'File' &&
         provider['ruleCount'].is_a?(Integer) &&
         provider['ruleCount'] == @store.list.length
+    end
+
+    def provider_already_healthy?
+      healthy_provider?(@mihomo_client.provider('need-proxy'))
+    rescue SyncError
+      false
     end
 
     def restore_running_config

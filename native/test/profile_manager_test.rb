@@ -97,6 +97,70 @@ class ProfileManagerTest < Minitest::Test
     paths.each { |path| assert_equal first.fetch(path), File.binread(path) }
   end
 
+  def test_unrelated_need_proxy_provider_in_merge_or_active_is_rejected_without_writes
+    managed_paths.first(1).concat([managed_paths.last]).each do |path|
+      original = File.binread(path)
+      config = load_yaml(path)
+      config['rule-providers'] ||= {}
+      config['rule-providers']['need-proxy'] = {
+        'type' => 'http', 'behavior' => 'classical', 'format' => 'yaml',
+        'url' => 'https://example.com/rules.yaml'
+      }
+      File.write(path, YAML.dump(config))
+      before = managed_paths.to_h { |managed| [managed, File.binread(managed)] }
+
+      error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+      assert_equal 'provider_collision', error.code
+      before.each { |managed, content| assert_equal content, File.binread(managed) }
+      File.binwrite(path, original)
+    end
+  end
+
+  def test_matching_managed_provider_is_idempotent
+    @manager.ensure_integrated!
+    before = managed_paths.to_h { |path| [path, File.binread(path)] }
+
+    @manager.ensure_integrated!
+
+    assert_equal before, managed_paths.to_h { |path| [path, File.binread(path)] }
+  end
+
+  def test_need_proxy_provider_with_different_path_is_not_adopted
+    merge_path = profile_path('merge-override.yaml')
+    merge = load_yaml(merge_path)
+    merge['rule-providers'] ||= {}
+    merge['rule-providers']['need-proxy'] = {
+      'type' => 'file', 'behavior' => 'classical', 'format' => 'yaml',
+      'path' => File.join(@directory, 'other', 'need-proxy.yaml')
+    }
+    File.write(merge_path, YAML.dump(merge))
+    before = managed_paths.to_h { |path| [path, File.binread(path)] }
+
+    error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+    assert_equal 'provider_collision', error.code
+    assert_equal before, managed_paths.to_h { |path| [path, File.binread(path)] }
+  end
+
+  def test_symlinked_managed_configs_are_rejected_without_following_or_replacing_links
+    managed_paths.each do |path|
+      target = "#{path}.outside"
+      FileUtils.mv(path, target)
+      File.symlink(target, path)
+      before = managed_paths.to_h { |managed| [managed, File.binread(managed)] }
+
+      error = assert_raises(TabOutProxy::UnsupportedProfileError) { @manager.ensure_integrated! }
+
+      assert_equal 'unsafe_profile_path', error.code
+      assert File.symlink?(path)
+      assert_equal before.fetch(path), File.binread(target)
+      before.each { |managed, content| assert_equal content, File.binread(managed) }
+      FileUtils.rm(path)
+      FileUtils.mv(target, path)
+    end
+  end
+
   def test_terminal_rules_in_overrides_cannot_defeat_final_direct_default
     rules = load_yaml(profile_path('rules-override.yaml'))
     rules['prepend'].concat(['MATCH,PROXY', 'MATCH,DIRECT'])

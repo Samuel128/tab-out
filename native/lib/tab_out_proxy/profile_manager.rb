@@ -68,6 +68,7 @@ module TabOutProxy
     def restore_backups!
       context = discover
       paths = context.fetch(:managed_paths)
+      paths.each { |path| assert_safe_path!("#{path}.bak") }
       unless paths.all? { |path| File.exist?("#{path}.bak") }
         raise UnsupportedProfileError.new('profile_backup_missing', 'A complete Clash profile backup is not available')
       end
@@ -131,6 +132,7 @@ module TabOutProxy
     end
 
     def read_mapping(path, code)
+      assert_safe_path!(path)
       content = File.binread(path)
       value = YAML.safe_load(content)
       unsupported!(code, 'Clash configuration has an unsupported shape') unless value.is_a?(Hash)
@@ -174,6 +176,7 @@ module TabOutProxy
         'merge_provider_container_invalid'
       )
       merge['rule-providers'] = providers
+      validate_managed_provider!(providers)
       providers['need-proxy'] = provider_definition
       merge
     end
@@ -201,6 +204,7 @@ module TabOutProxy
         'active_provider_container_invalid'
       )
       active['rule-providers'] = providers
+      validate_managed_provider!(providers)
       providers['need-proxy'] = provider_definition
 
       managed = CORPORATE_RULES + [PROVIDER_RULE]
@@ -218,6 +222,26 @@ module TabOutProxy
         'format' => 'yaml',
         'path' => @provider_path
       }
+    end
+
+    def validate_managed_provider!(providers)
+      return unless providers.key?('need-proxy')
+      return if providers['need-proxy'] == provider_definition
+
+      unsupported!('provider_collision', 'An unrelated need-proxy provider already exists')
+    end
+
+    def assert_safe_path!(path)
+      current = File.expand_path(path)
+      loop do
+        unsupported!('unsafe_profile_path', 'Clash configuration contains a symlinked path') if File.symlink?(current)
+        break if current == @config_dir
+
+        parent = File.dirname(current)
+        break if parent == current
+
+        current = parent
+      end
     end
 
     def array_of_strings(value, code)
@@ -240,6 +264,8 @@ module TabOutProxy
     end
 
     def write_yaml_if_changed(path, value)
+      assert_safe_path!(path)
+      assert_safe_path!("#{path}.bak")
       content = YAML.dump(value)
       return if File.exist?(path) && File.binread(path) == content
 
@@ -248,12 +274,14 @@ module TabOutProxy
 
     def capture_snapshot(paths)
       paths.each_with_object({}) do |path, snapshot|
+        assert_safe_path!(path)
         snapshot[path] = File.exist?(path) ? File.binread(path) : nil
       end
     end
 
     def restore_snapshot(snapshot)
       snapshot.each do |path, content|
+        assert_safe_path!(path)
         if content.nil?
           FileUtils.rm_f(path)
         else

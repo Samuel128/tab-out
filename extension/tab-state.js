@@ -9,14 +9,21 @@
   const OPEN_TABS_REFRESH_DELAY_MS = 520;
 
   function isRealTab(tab) {
-    const url = tab && tab.url ? tab.url : '';
-    return ![
+    const url = tab && typeof tab.url === 'string' ? tab.url.trim() : '';
+    if (!url || [
       'chrome://',
       'chrome-extension://',
       'about:',
       'edge://',
       'brave://',
-    ].some(prefix => url.startsWith(prefix));
+    ].some(prefix => url.startsWith(prefix))) return false;
+
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'file:' || Boolean(parsed.hostname);
+    } catch {
+      return false;
+    }
   }
 
   function getRealTabs(tabs) {
@@ -53,7 +60,9 @@
   function bindTabRefreshListeners(tabsApi, refresh) {
     tabsApi.onCreated.addListener(refresh);
     tabsApi.onRemoved.addListener(refresh);
-    tabsApi.onUpdated.addListener(refresh);
+    tabsApi.onUpdated.addListener((_tabId, changeInfo) => {
+      if (changeInfo && typeof changeInfo.url === 'string') refresh();
+    });
   }
 
   return {

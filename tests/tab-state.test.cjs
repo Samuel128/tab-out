@@ -12,8 +12,13 @@ const {
 
 test('isRealTab accepts regular web pages and rejects browser pages', () => {
   assert.equal(isRealTab({ url: 'https://example.com' }), true);
+  assert.equal(isRealTab({ url: 'file:///tmp/example.html' }), true);
   assert.equal(isRealTab({ url: 'chrome://settings/' }), false);
-  assert.equal(isRealTab(null), true);
+  assert.equal(isRealTab(null), false);
+  assert.equal(isRealTab({}), false);
+  assert.equal(isRealTab({ url: '' }), false);
+  assert.equal(isRealTab({ url: 'not a renderable URL' }), false);
+  assert.equal(isRealTab({ url: 'data:text/plain,hello' }), false);
 });
 
 test('getRealTabs excludes browser and extension pages', () => {
@@ -25,6 +30,9 @@ test('getRealTabs excludes browser and extension pages', () => {
     { id: 5, url: 'edge://settings/' },
     { id: 6, url: 'brave://settings/' },
     { id: 7, url: 'https://example.com/b' },
+    { id: 8 },
+    { id: 9, url: '' },
+    { id: 10, url: 'not a renderable URL' },
   ];
 
   assert.deepEqual(getRealTabs(tabs).map(tab => tab.id), [1, 7]);
@@ -85,7 +93,7 @@ test('live refresh waits for sequential chip and card exit animations', () => {
   assert.ok(OPEN_TABS_REFRESH_DELAY_MS <= 600);
 });
 
-test('bindTabRefreshListeners registers created, removed, and updated events', () => {
+test('bindTabRefreshListeners always refreshes created and removed tabs', () => {
   const registered = [];
   const event = name => ({
     addListener: callback => registered.push([name, callback]),
@@ -96,7 +104,8 @@ test('bindTabRefreshListeners registers created, removed, and updated events', (
     onUpdated: event('updated'),
   };
 
-  const refresh = () => {};
+  let refreshes = 0;
+  const refresh = () => { refreshes += 1; };
   const { bindTabRefreshListeners } = require('../extension/tab-state.js');
   bindTabRefreshListeners(tabsApi, refresh);
 
@@ -104,5 +113,32 @@ test('bindTabRefreshListeners registers created, removed, and updated events', (
     registered.map(([name]) => name),
     ['created', 'removed', 'updated']
   );
-  assert.ok(registered.every(([, callback]) => callback === refresh));
+
+  registered.find(([name]) => name === 'created')[1]({ id: 1 });
+  registered.find(([name]) => name === 'removed')[1](1, {});
+
+  assert.equal(refreshes, 2);
+});
+
+test('bindTabRefreshListeners ignores non-URL tab updates', () => {
+  const registered = {};
+  const event = name => ({
+    addListener: callback => { registered[name] = callback; },
+  });
+  const tabsApi = {
+    onCreated: event('created'),
+    onRemoved: event('removed'),
+    onUpdated: event('updated'),
+  };
+
+  let refreshes = 0;
+  const { bindTabRefreshListeners } = require('../extension/tab-state.js');
+  bindTabRefreshListeners(tabsApi, () => { refreshes += 1; });
+
+  registered.updated(1, { status: 'loading' }, {});
+  registered.updated(1, { title: 'Updated title' }, {});
+  assert.equal(refreshes, 0);
+
+  registered.updated(1, { url: 'https://example.com/new' }, {});
+  assert.equal(refreshes, 1);
 });

@@ -443,16 +443,13 @@ function showToast(message) {
 }
 
 /**
- * checkAndShowEmptyState()
+ * renderOpenTabsEmptyState()
  *
- * Shows a cheerful "Inbox zero" message when all domain cards are gone.
+ * Shows the established "Inbox zero" state after the final card disappears.
  */
-function checkAndShowEmptyState() {
+function renderOpenTabsEmptyState() {
   const missionsEl = document.getElementById('openTabsMissions');
   if (!missionsEl) return;
-
-  const remaining = missionsEl.querySelectorAll('.mission-card:not(.closing)').length;
-  if (remaining > 0) return;
 
   missionsEl.innerHTML = `
     <div class="missions-empty-state">
@@ -468,6 +465,14 @@ function checkAndShowEmptyState() {
 
   const countEl = document.getElementById('openTabsSectionCount');
   if (countEl) countEl.textContent = '0 domains';
+}
+
+function checkAndShowEmptyState() {
+  const missionsEl = document.getElementById('openTabsMissions');
+  if (!missionsEl) return;
+
+  const remaining = missionsEl.querySelectorAll('.mission-card:not(.closing)').length;
+  if (remaining === 0) renderOpenTabsEmptyState();
 }
 
 /**
@@ -1102,8 +1107,7 @@ async function renderHistorySection() {
 /**
  * renderOpenTabsSection()
  *
- * Fetches and renders only the Chrome tab-derived parts of the dashboard.
- * Saved items and history stay untouched during live tab refreshes.
+ * Fetches and renders the open-tab cards and their derived totals.
  */
 async function renderOpenTabsSection({ fetchTabs = true } = {}) {
   if (fetchTabs) await fetchOpenTabs();
@@ -1232,9 +1236,9 @@ async function renderOpenTabsSection({ fetchTabs = true } = {}) {
     openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
-  } else if (openTabsSection) {
-    if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = '';
-    openTabsSection.style.display = 'none';
+  } else if (openTabsSection && openTabsSection.style.display !== 'none') {
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
+    renderOpenTabsEmptyState();
   }
 
   // --- Footer stats ---
@@ -1248,8 +1252,8 @@ async function renderOpenTabsSection({ fetchTabs = true } = {}) {
 /**
  * renderStaticDashboard()
  *
- * Paints the full dashboard on initial load. Later Chrome tab events use the
- * focused renderer above so saved items and history are not rebuilt.
+ * Paints the full dashboard on initial load. Later Chrome tab events refresh
+ * open tabs and history together without rebuilding saved items.
  */
 async function renderStaticDashboard() {
   const greetingEl = document.getElementById('greeting');
@@ -1266,9 +1270,14 @@ async function renderDashboard() {
   await renderStaticDashboard();
 }
 
-const scheduleOpenTabsRefresh = TabOutTabState.createDebouncedTask(() => {
-  renderOpenTabsSection().catch(error => {
-    console.warn('[tab-out] Failed to refresh open tabs:', error);
+async function renderTabDerivedSections() {
+  await renderOpenTabsSection();
+  await renderHistorySection();
+}
+
+const scheduleTabDerivedRefresh = TabOutTabState.createDebouncedTask(() => {
+  renderTabDerivedSections().catch(error => {
+    console.warn('[tab-out] Failed to refresh tab-derived sections:', error);
   });
 }, TabOutTabState.OPEN_TABS_REFRESH_DELAY_MS);
 
@@ -1298,7 +1307,7 @@ document.addEventListener('click', async (e) => {
       banner.style.opacity = '0';
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     showToast('Closed extra Tab Out tabs');
     return;
   }
@@ -1357,7 +1366,7 @@ document.addEventListener('click', async (e) => {
       }, 200);
     }
 
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     showToast('Tab closed');
     return;
   }
@@ -1393,7 +1402,7 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => chip.remove(), 200);
     }
 
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     showToast('Saved for later');
     await renderDeferredColumn();
     return;
@@ -1470,7 +1479,7 @@ document.addEventListener('click', async (e) => {
     const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
     showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
 
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     return;
   }
 
@@ -1506,7 +1515,7 @@ document.addEventListener('click', async (e) => {
       card.classList.add('has-neutral-bar');
     }
 
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     showToast('Closed duplicates, kept one copy each');
     return;
   }
@@ -1527,7 +1536,7 @@ document.addEventListener('click', async (e) => {
       animateCardOut(c);
     });
 
-    scheduleOpenTabsRefresh();
+    scheduleTabDerivedRefresh();
     showToast('All tabs closed. Fresh start.');
     return;
   }
@@ -1579,5 +1588,5 @@ document.addEventListener('input', async (e) => {
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
-TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleOpenTabsRefresh);
+TabOutTabState.bindTabRefreshListeners(chrome.tabs, scheduleTabDerivedRefresh);
 renderDashboard();

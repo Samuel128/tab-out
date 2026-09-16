@@ -1,0 +1,8 @@
+prepend:
+  - DOMAIN-SUFFIX,existing.example,DIRECT
+delete:
+  - DOMAIN-SUFFIX,obsolete.example,PROXY
+append:
+  - DOMAIN-SUFFIX,fallback.example,DIRECT
+custom-rules-key:
+  preserved: true

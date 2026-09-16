@@ -1,0 +1,25 @@
+mixed-port: 7897
+mode: rule
+dns:
+  enable: true
+  nameserver-policy:
+    '+.internal.example':
+      - 192.0.2.53
+rule-providers:
+  existing-provider:
+    type: file
+    behavior: domain
+    path: ./ruleset/existing.yaml
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - DIRECT
+      - Sanitized Node
+rules:
+  - DOMAIN-SUFFIX,existing.example,DIRECT
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - MATCH,PROXY
+custom-active-key:
+  preserved: true

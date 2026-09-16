@@ -31,8 +31,9 @@ The agent will walk you through it. Takes about 1 minute.
 - **Save for later** bookmark tabs to a checklist before closing them
 - **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
 - **Expandable groups** show the first 8 tabs with a clickable "+N more"
+- **English and Chinese UI** with a language preference shared by the dashboard and routing guide
 - **100% local** your tab data never leaves your machine
-- **Optional proxy routing** uses a separately installed local Native Messaging host; the tab dashboard needs no host
+- **Optional proxy routing** uses a separately installed local host to manage Clash's `need-proxy` list; the current profile falls back to `DIRECT`
 
 ---
 
@@ -100,6 +101,33 @@ ruby scripts/uninstall-native-host
 
 Uninstalling preserves the managed rules data by default, so reinstalling can reuse it. It does not undo any Clash configuration already applied while the host was running. Restore a Clash configuration backup separately if needed. If the extension cannot connect to the host after installation, check that Chrome's loaded extension path matches the path used during installation, then reload the extension.
 
+## Proxy routing architecture
+
+The **Proxy routing** panel is below **Open tabs** on the new-tab page. Its **[How routing works](extension/architecture.html)** link opens a separate architecture guide inside the extension. The guide and dashboard use the same English/Chinese preference. The panel shows the current list and sync status; the guide explains the design, not a snapshot of your live list.
+
+Clash does not read text from the Tab Out form directly. A change follows this path:
+
+1. The extension sends an `add` or `remove` request to the fixed `com.samuel.tabout.proxy` host through Chrome Native Messaging (`chrome.runtime.sendNativeMessage`).
+2. The Ruby host validates the match and saves the authoritative list in `~/Library/Application Support/Tab Out Proxy/state.json`. It also generates `tab-out-need-proxy.yaml` inside the Clash Verge Rev configuration directory. For example, a domain-suffix entry could produce:
+
+   ```yaml
+   payload:
+     - DOMAIN-SUFFIX,chatgpt.com
+   ```
+
+3. The active Clash configuration registers that file as a local, classical `rule-providers.need-proxy` provider. `RULE-SET,need-proxy,PROXY` sends matching domains to the profile's `PROXY` group. Tab Out supports suffix (`DOMAIN-SUFFIX`), exact (`DOMAIN`), and contains (`DOMAIN-KEYWORD`) matches; contains matching is intentionally broad.
+4. The host reloads the active Clash configuration through Mihomo's local Unix socket, refreshes `need-proxy`, and verifies that Clash loaded the same number of rules as the saved list. Tab Out shows **Applied** only after that check. If Clash is unavailable, the change is saved as **Pending** for a later retry. A failed verification rolls back the change.
+
+The simplified rule order in this setup is:
+
+```text
+DOMAIN-SUFFIX,internal.example,DIRECT  # known company domains are protected first
+RULE-SET,need-proxy,PROXY       # domains managed in Tab Out
+MATCH,DIRECT                    # fallback after the remaining direct rules
+```
+
+Known company domains such as `internal.example`, `corp.example`, and `business.example` have separate `DIRECT` rules ahead of the Tab Out list. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
+
 ---
 
 ## Tech stack
@@ -108,6 +136,8 @@ Uninstalling preserves the managed rules data by default, so reinstalling can re
 |------|-----|
 | Extension | Chrome Manifest V3 |
 | Storage | chrome.storage.local |
+| Proxy host | Local Ruby Native Messaging executable |
+| Proxy rule storage | JSON state plus a Clash YAML rule provider |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
 

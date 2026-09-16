@@ -164,6 +164,94 @@ class InstallerTest < Minitest::Test
     assert File.executable?(installed_host)
   end
 
+  def test_uninstall_waits_for_in_progress_install_and_removes_complete_installation
+    marker = File.join(@tmp, 'install-at-manifest')
+    release = File.join(@tmp, 'release-install')
+    paused_install = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      module TabOutNativeHostInstall
+        class << self
+          alias_method :unpaused_atomic_write, :atomic_write
+          def atomic_write(path, content)
+            File.write(ENV.fetch('PAUSE_MARKER'), 'ready')
+            sleep 0.01 until File.exist?(ENV.fetch('RELEASE_MARKER'))
+            unpaused_atomic_write(path, content)
+          end
+        end
+      end
+      TabOutNativeHostInstall.install(ARGV.fetch(0))
+    RUBY
+    install = Process.spawn({ 'HOME' => @home, 'PAUSE_MARKER' => marker, 'RELEASE_MARKER' => release },
+                            RbConfig.ruby, '-e', paused_install, @extension, out: File::NULL, err: File::NULL)
+    uninstall = nil
+    begin
+      wait_for_file(marker)
+      uninstall = Process.spawn({ 'HOME' => @home }, RbConfig.ruby, UNINSTALLER,
+                                out: File::NULL, err: File::NULL)
+      sleep 0.2
+      assert_nil Process.waitpid(uninstall, Process::WNOHANG), 'uninstall completed while install held the transaction'
+      File.write(release, 'go')
+      assert_process_success(install)
+      install = nil
+      assert_process_success(uninstall)
+      uninstall = nil
+      refute File.exist?(host_manifest)
+      refute File.exist?(native_dir)
+    ensure
+      File.write(release, 'go')
+      [install, uninstall].compact.each do |pid|
+        Process.kill('TERM', pid) rescue nil
+        Process.waitpid(pid) rescue nil
+      end
+    end
+  end
+
+  def test_install_waits_for_in_progress_uninstall_and_restores_complete_installation
+    assert run_script(INSTALLER, '--extension-path', @extension).last.success?
+    marker = File.join(@tmp, 'uninstall-at-code-removal')
+    release = File.join(@tmp, 'release-uninstall')
+    paused_uninstall = <<~RUBY
+      require #{File.join(ROOT, 'scripts', 'native_host_install').inspect}
+      module FileUtils
+        class << self
+          alias_method :unpaused_remove_entry, :remove_entry
+          def remove_entry(path, *args)
+            if path == TabOutNativeHostInstall.native_dir
+              File.write(ENV.fetch('PAUSE_MARKER'), 'ready')
+              sleep 0.01 until File.exist?(ENV.fetch('RELEASE_MARKER'))
+            end
+            unpaused_remove_entry(path, *args)
+          end
+        end
+      end
+      TabOutNativeHostInstall.uninstall
+    RUBY
+    uninstall = Process.spawn({ 'HOME' => @home, 'PAUSE_MARKER' => marker, 'RELEASE_MARKER' => release },
+                              RbConfig.ruby, '-e', paused_uninstall, out: File::NULL, err: File::NULL)
+    install = nil
+    begin
+      wait_for_file(marker)
+      install = Process.spawn({ 'HOME' => @home }, RbConfig.ruby, INSTALLER,
+                              '--extension-path', @extension, out: File::NULL, err: File::NULL)
+      sleep 0.2
+      assert_nil Process.waitpid(install, Process::WNOHANG), 'install completed while uninstall held the transaction'
+      File.write(release, 'go')
+      assert_process_success(uninstall)
+      uninstall = nil
+      assert_process_success(install)
+      install = nil
+      assert File.file?(host_manifest)
+      assert File.executable?(installed_host)
+      assert_equal installed_host, JSON.parse(File.read(host_manifest)).fetch('path')
+    ensure
+      File.write(release, 'go')
+      [install, uninstall].compact.each do |pid|
+        Process.kill('TERM', pid) rescue nil
+        Process.waitpid(pid) rescue nil
+      end
+    end
+  end
+
   def test_install_uses_supplied_absolute_path_for_id_even_when_symlinked
     linked = File.join(@tmp, 'linked-extension')
     File.symlink(@extension, linked)
@@ -214,6 +302,15 @@ class InstallerTest < Minitest::Test
   end
 
   private
+
+  def wait_for_file(path)
+    Timeout.timeout(5) { sleep 0.01 until File.exist?(path) }
+  end
+
+  def assert_process_success(pid)
+    _, status = Timeout.timeout(5) { Process.waitpid2(pid) }
+    assert status.success?, "process #{pid} exited with #{status.exitstatus}"
+  end
 
   def run_failing_manifest_install
     script = <<~RUBY

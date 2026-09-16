@@ -132,7 +132,10 @@ module TabOutNativeHostInstall
   end
 
   def self.uninstall
-    File.delete(manifest_path) if File.file?(manifest_path)
-    FileUtils.remove_entry(native_dir) if File.directory?(native_dir)
+    FileUtils.mkdir_p(data_dir)
+    with_install_lock do
+      File.delete(manifest_path) if File.file?(manifest_path)
+      FileUtils.remove_entry(native_dir) if File.directory?(native_dir)
+    end
   end
 end

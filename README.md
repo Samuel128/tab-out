@@ -13,7 +13,7 @@ The tab dashboard works without a server or account. The optional proxy-routing 
 Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
 
 ```
-https://github.com/zarazhangrui/tab-out
+https://github.com/Samuel128/tab-out
 ```
 
 The agent will walk you through it. Takes about 1 minute.
@@ -42,7 +42,7 @@ The agent will walk you through it. Takes about 1 minute.
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/zarazhangrui/tab-out.git
+git clone https://github.com/Samuel128/tab-out.git
 ```
 
 **2. Load the Chrome extension**
@@ -149,4 +149,4 @@ MIT
 
 ---
 
-Built by [Zara](https://x.com/zarazhangrui)
+Built by [Samuel](https://github.com/Samuel128). Based on the original [Tab Out by Zara](https://github.com/zarazhangrui/tab-out).

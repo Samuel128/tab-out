@@ -87,6 +87,20 @@ class RuleTest < Minitest::Test
     end
   end
 
+  def test_rejects_business_domain_and_subdomains_for_suffix_and_exact
+    %w[business.example intranet.business.example api.prd.business.example].each do |domain|
+      %w[suffix exact].each do |type|
+        assert_rule_error('corporate_target', type: type, value: domain)
+      end
+    end
+  end
+
+  def test_rejects_keywords_matching_business_labels_and_fragments
+    %w[business corphin china prd.business intranet.business].each do |keyword|
+      assert_rule_error('corporate_target', type: 'keyword', value: keyword)
+    end
+  end
+
   def test_preserves_legitimate_keywords_without_protected_corporate_fragments
     %w[openai google yummy hardware].each do |keyword|
       rule = TabOutProxy::Rule.build(type: 'keyword', value: keyword)

@@ -13,8 +13,8 @@ module TabOutProxy
       'keyword' => 'DOMAIN-KEYWORD',
       'exact' => 'DOMAIN'
     }.freeze
-    CORPORATE_SUFFIXES = %w[internal.example corp.example].freeze
-    CORPORATE_KEYWORD_MARKERS = %w[internal corp].freeze
+    CORPORATE_SUFFIXES = %w[internal.example corp.example business.example].freeze
+    CORPORATE_KEYWORD_MARKERS = %w[internal corp business].freeze
     PUBLIC_SUFFIX_ONLY = %w[
       com net org edu gov mil int io ai app dev cloud xyz top
       cn com.cn net.cn org.cn uk co.uk jp co.jp local

@@ -1680,15 +1680,17 @@ document.getElementById('proxyForm').addEventListener('submit', async event => {
   if (proxyController.state().busy) return;
   const type = document.getElementById('proxyMatchType').value;
   const input = document.getElementById('proxyValue');
-  const value = TabOutProxyRouting.normalizedInput(type, input.value);
-  if (!value) return;
   try {
-    const data = await proxyController.add(type, value);
+    const data = await TabOutProxyRouting.submitManualRule(
+      type, input.value, (matchType, value) => proxyController.add(matchType, value)
+    );
+    if (!data) return;
     input.value = '';
     updateProxyPreview();
     proxyActionToast(data);
   } catch (error) {
-    proxyActionError(error);
+    if (error.code === 'invalid_keyword_input') showToast(error.message);
+    else proxyActionError(error);
   }
 });
 

@@ -171,6 +171,27 @@ test('rule preview and rendering escape untrusted helper values', () => {
   assert.match(html, /DOMAIN-SUFFIX/);
 });
 
+test('URL-like Contains input is rejected before add and preview explains why', () => {
+  for (const value of ['https://google.com/path', 'google.com/path', 'google.com:443', 'google.com?q=1', 'google.com#section']) {
+    assert.throws(() => ProxyRouting.normalizedInput('keyword', value), /Contains.*keyword.*URL/i);
+    const preview = ProxyRouting.rulePreview('keyword', value);
+    assert.match(preview, /Contains.*keyword.*URL/i);
+    assert.doesNotMatch(preview, /DOMAIN-KEYWORD,/);
+  }
+  assert.equal(ProxyRouting.normalizedInput('keyword', '  GooGle.  '), 'google');
+  assert.equal(ProxyRouting.rulePreview('keyword', '  GooGle.  '), 'DOMAIN-KEYWORD,google');
+});
+
+test('manual Contains validation prevents transport mutation but keeps valid keyword flow', async () => {
+  const calls = [];
+  const add = async (type, value) => { calls.push([type, value]); return { status: 'active' }; };
+  await assert.rejects(ProxyRouting.submitManualRule('keyword', 'https://google.com/path', add), /Contains.*keyword.*URL/i);
+  assert.deepEqual(calls, []);
+  const result = await ProxyRouting.submitManualRule('keyword', ' GooGle. ', add);
+  assert.equal(result.status, 'active');
+  assert.deepEqual(calls, [['keyword', 'google']]);
+});
+
 test('rule rows distinguish applied, pending, and unverified states', () => {
   const rules = [{ id: 'abc', type: 'suffix', value: 'example.com' }];
   assert.match(ProxyRouting.renderRuleRows(rules, 'active'), /Applied/);
@@ -225,6 +246,35 @@ test('controller removes a rule and offers five seconds to undo', async () => {
   assert.equal(controller.state().undo, null);
   assert.equal(timers.size, 0);
   assert.deepEqual(calls.map(([command]) => command), ['status', 'remove', 'add']);
+});
+
+test('failed Undo add restores a five-second retry window', async () => {
+  const rule = { id: 'abc', type: 'suffix', value: 'example.com' };
+  let rules = [rule];
+  let addAttempts = 0;
+  const timers = new Map();
+  let nextTimer = 1;
+  const controller = ProxyRouting.createController(async command => {
+    if (command === 'remove') rules = [];
+    if (command === 'add') {
+      addAttempts += 1;
+      if (addAttempts === 1) throw new Error('Temporary reload failure');
+      rules = [rule];
+    }
+    return { status: 'active', rules, syncedAt: null };
+  }, {
+    setTimeout(callback, ms) { assert.equal(ms, 5000); const id = nextTimer++; timers.set(id, callback); return id; },
+    clearTimeout(id) { timers.delete(id); },
+  });
+  await controller.load();
+  await controller.remove('abc');
+  await assert.rejects(controller.undo(), /Temporary reload failure/);
+  assert.equal(controller.state().undo?.id, 'abc');
+  assert.equal(timers.size, 1);
+  await controller.undo();
+  assert.equal(addAttempts, 2);
+  assert.equal(controller.state().undo, null);
+  assert.equal(timers.size, 0);
 });
 
 test('controller keeps failed removal in the displayed list without offering undo', async () => {
@@ -307,18 +357,23 @@ test('existing card and history buttons lose active style when sync becomes pend
     disabled: false,
     textContent: '',
     title: '',
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
   };
   const rules = [{ type: 'suffix', value: 'example.com' }];
   const state = (status, error = null) => ({ data: { status, rules }, error });
   ProxyRouting.applyQuickAddButtonState(button, state('active'));
   assert.equal(classes.has('is-active'), true);
   assert.equal(button.textContent, 'Proxy added');
+  assert.equal(button.attributes['aria-label'], 'Proxy added docs.example.com');
   ProxyRouting.applyQuickAddButtonState(button, state('pending'));
   assert.equal(classes.has('is-active'), false);
   assert.equal(button.textContent, 'Waiting for Clash');
+  assert.equal(button.attributes['aria-label'], 'Waiting for Clash docs.example.com');
   ProxyRouting.applyQuickAddButtonState(button, state('active', { code: 'sync_failed' }));
   assert.equal(classes.has('is-active'), false);
   assert.equal(button.textContent, 'Unverified');
+  assert.equal(button.attributes['aria-label'], 'Unverified docs.example.com');
 });
 
 test('failed quick-add is marked retryable even when helper rolls the rule back', async () => {

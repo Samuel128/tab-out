@@ -148,6 +148,7 @@ const TabOutProxyRouting = (() => {
     button.disabled = presentation.disabled;
     button.textContent = presentation.label;
     button.title = presentation.title;
+    button.setAttribute('aria-label', `${presentation.label} ${button.dataset.proxyDomain}`);
   }
 
   function quickAddButton(host, state) {
@@ -159,14 +160,27 @@ const TabOutProxyRouting = (() => {
 
   function normalizedInput(type, value) {
     const raw = String(value || '').trim().toLowerCase();
-    if (type === 'keyword') return raw;
+    if (type === 'keyword') {
+      if (['/', ':', '?', '#', '\\'].some(character => raw.includes(character))) {
+        throw proxyError('invalid_keyword_input', 'Contains accepts a keyword, not a URL or path. Remove the scheme, path, port, query, or fragment.');
+      }
+      return raw.replace(/\.+$/, '');
+    }
     try {
       return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase().replace(/\.$/, '');
     } catch { return raw; }
   }
 
+  async function submitManualRule(type, raw, add) {
+    const value = normalizedInput(type, raw);
+    if (!value) return null;
+    return add(type, value);
+  }
+
   function rulePreview(type, value) {
-    return TYPES[type] && String(value || '').trim() ? `${TYPES[type]},${normalizedInput(type, value)}` : 'Choose a match and enter a value';
+    if (!TYPES[type] || !String(value || '').trim()) return 'Choose a match and enter a value';
+    try { return `${TYPES[type]},${normalizedInput(type, value)}`; }
+    catch (error) { return error.message; }
   }
 
   function escapeHtml(value) {
@@ -228,6 +242,14 @@ const TabOutProxyRouting = (() => {
       undoRule = null;
       notify();
     }
+    function scheduleUndoExpiry() {
+      undoTimer = clock.setTimeout(() => {
+        undoRule = null;
+        undoTimer = null;
+        notify();
+      }, 5000);
+      notify();
+    }
     async function execute(command, payload) {
       busy = true;
       error = null;
@@ -261,25 +283,28 @@ const TabOutProxyRouting = (() => {
         const result = await execute('remove', { id });
         clearUndo();
         undoRule = rule;
-        undoTimer = clock.setTimeout(() => {
-          undoRule = null;
-          undoTimer = null;
-          notify();
-        }, 5000);
-        notify();
+        scheduleUndoExpiry();
         return result;
       },
       async undo() {
         if (!undoRule) throw proxyError('undo_expired', 'The undo period has expired.');
         const rule = undoRule;
-        clearUndo();
-        return execute('add', { type: rule.type, value: rule.value });
+        if (undoTimer !== null) clock.clearTimeout(undoTimer);
+        undoTimer = null;
+        try {
+          const result = await execute('add', { type: rule.type, value: rule.value });
+          clearUndo();
+          return result;
+        } catch (failure) {
+          scheduleUndoExpiry();
+          throw failure;
+        }
       },
       dispose() { clearUndo(); onChange = () => {}; },
     };
   }
 
-  return { HOST, VERSION, sendRequest, quickAddHost, confirmedQuickAdd, createQuickAddDialog, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
+  return { HOST, VERSION, sendRequest, quickAddHost, confirmedQuickAdd, createQuickAddDialog, quickAddButton, applyQuickAddButtonState, isSuffixCovered, normalizedInput, submitManualRule, rulePreview, renderRuleRows, statusText, actionFeedback, escapeHtml, createController };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = TabOutProxyRouting;

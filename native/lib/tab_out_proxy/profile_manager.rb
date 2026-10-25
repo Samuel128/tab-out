@@ -28,6 +28,13 @@ module TabOutProxy
       public_profile(context)
     end
 
+    def browser_proxy_info
+      active = read_mapping(active_config_path, 'active_config_invalid')
+      port = [active['mixed-port'], active['port']].find { |value| value.is_a?(Integer) && value.between?(1, 65_535) }
+      unsupported!('proxy_port_missing', 'Current Clash configuration has no valid HTTP proxy port') unless port
+      { 'proxyPort' => port, 'tunConfigured' => active['tun'].is_a?(Hash) && active['tun']['enable'] == true }
+    end
+
     def ensure_integrated!
       context = discover
       validate_remote_profile!(context.fetch(:remote))
@@ -35,7 +42,7 @@ module TabOutProxy
       snapshot = capture_snapshot(context.fetch(:managed_paths))
 
       merge = integrated_merge(context.fetch(:merge))
-      rules = integrated_rule_override(context.fetch(:rules))
+      rules = integrated_rule_override(context.fetch(:rules), context.fetch(:remote).fetch('rules'))
       active = integrated_active(context.fetch(:active))
 
       write_yaml_if_changed(context.fetch(:merge_path), merge)
@@ -175,7 +182,7 @@ module TabOutProxy
       merge
     end
 
-    def integrated_rule_override(original)
+    def integrated_rule_override(original, remote_rules)
       rules = deep_copy(original)
       prepend = array_of_strings(rules['prepend'], 'rules_override_invalid')
       delete = array_of_strings(rules['delete'], 'rules_override_invalid')
@@ -183,10 +190,11 @@ module TabOutProxy
       managed = PrivateRouting.direct_rules + [PROVIDER_RULE]
 
       rules['prepend'] = managed + prepend.reject do |rule|
-        managed.include?(rule) || terminal_rule?(rule)
+        managed.include?(rule) || terminal_rule?(rule) || !non_proxy_rule?(rule)
       end
-      rules['delete'] = (delete.reject { |rule| rule == TARGET_TERMINAL } + [SOURCE_TERMINAL]).uniq
-      rules['append'] = append.reject { |rule| terminal_rule?(rule) } + [TARGET_TERMINAL]
+      unmanaged_proxy_rules = remote_rules.reject { |rule| non_proxy_rule?(rule) || rule == PROVIDER_RULE }
+      rules['delete'] = (delete.reject { |rule| rule == TARGET_TERMINAL } + unmanaged_proxy_rules + [SOURCE_TERMINAL]).uniq
+      rules['append'] = append.reject { |rule| terminal_rule?(rule) || !non_proxy_rule?(rule) } + [TARGET_TERMINAL]
       rules
     end
 
@@ -203,10 +211,15 @@ module TabOutProxy
 
       managed = PrivateRouting.direct_rules + [PROVIDER_RULE]
       preserved = active.fetch('rules').reject do |rule|
-        managed.include?(rule) || rule.match?(/\AMATCH,/)
+        managed.include?(rule) || terminal_rule?(rule) || !non_proxy_rule?(rule)
       end
       active['rules'] = managed + preserved + [TARGET_TERMINAL]
       active
+    end
+
+    def non_proxy_rule?(rule)
+      # Logical rules may contain commas; inspect the final policy, not a fixed field.
+      rule.match?(/,(?:DIRECT|REJECT|REJECT-DROP)(?:,no-resolve)?\z/)
     end
 
     def provider_definition

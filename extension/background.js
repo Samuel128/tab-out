@@ -1,8 +1,8 @@
 /**
- * background.js — Service Worker for Badge Updates
+ * background.js — Badge updates and optional browser whitelist routing
  *
  * Chrome's "always-on" background script for Tab Out.
- * Its only job: keep the toolbar badge showing the current open tab count.
+ * Keeps the toolbar badge current and checks local proxy health when opted in.
  *
  * Since we no longer have a server, we query chrome.tabs directly.
  * The badge counts real web tabs (skipping chrome:// and extension pages).
@@ -12,6 +12,44 @@
  *   Amber  (#b8892e) → 11–20 tabs (getting busy)
  *   Red    (#b35a5a) → 21+ tabs   (time to cull!)
  */
+
+importScripts('browser-routing.js');
+const browserRouting = TabOutBrowserRouting.createManager(chrome);
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (sender.id !== chrome.runtime.id || !TabOutBrowserRouting.messages.has(message?.type)) return false;
+  const action = { 'browser-routing-status': 'status', 'browser-routing-enable': 'enable', 'browser-routing-disable': 'disable', 'browser-routing-refresh': 'refresh' }[message.type];
+  browserRouting[action]().then(data => reply({ ok: true, data }), error => reply({ ok: false, error: error.message }));
+  return true;
+});
+const ROUTING_ALARM = 'tab-out-routing-health';
+let routingRefresh;
+function refreshBrowserRouting() {
+  if (!routingRefresh) routingRefresh = browserRouting.refresh().catch(() => {}).finally(() => { routingRefresh = null; });
+  return routingRefresh;
+}
+async function syncRoutingAlarm() {
+  if (!chrome.alarms?.get || !chrome.alarms?.create || !chrome.alarms?.clear) return;
+  const saved = await chrome.storage.local.get('browserRoutingEnabled');
+  const allowed = await chrome.permissions.contains({ permissions: ['proxy'] });
+  if (saved.browserRoutingEnabled && allowed) {
+    const alarm = await chrome.alarms.get(ROUTING_ALARM);
+    if (!alarm || alarm.periodInMinutes !== 0.5) await chrome.alarms.create(ROUTING_ALARM, { periodInMinutes: 0.5 });
+  } else await chrome.alarms.clear(ROUTING_ALARM);
+}
+function startBrowserRouting() { void syncRoutingAlarm().catch(() => {}); void refreshBrowserRouting(); }
+chrome.runtime.onStartup.addListener(refreshBrowserRouting);
+chrome.runtime.onInstalled.addListener(startBrowserRouting);
+chrome.alarms?.onAlarm?.addListener(alarm => { if (alarm.name === ROUTING_ALARM) void refreshBrowserRouting(); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.browserRoutingEnabled) void syncRoutingAlarm().catch(() => {});
+});
+chrome.permissions.onAdded.addListener(startBrowserRouting);
+chrome.permissions.onRemoved.addListener(() => { void syncRoutingAlarm().catch(() => {}); });
+chrome.proxy?.onProxyError?.addListener(error => {
+  if (error.fatal) void browserRouting.recover().catch(() => {});
+  else void refreshBrowserRouting();
+});
+startBrowserRouting();
 
 // ─── Badge updater ────────────────────────────────────────────────────────────
 
@@ -75,6 +113,7 @@ chrome.runtime.onStartup.addListener(() => {
 // Update badge whenever a tab is opened
 chrome.tabs.onCreated.addListener(() => {
   updateBadge();
+  void refreshBrowserRouting();
 });
 
 // Update badge whenever a tab is closed

@@ -2,6 +2,7 @@
 
 require_relative 'test_helper'
 require 'json'
+require 'open3'
 require 'stringio'
 require 'yaml'
 require 'tab_out_proxy/protocol'
@@ -49,6 +50,26 @@ class HostTest < Minitest::Test
       assert_equal false, response.fetch('ok')
       assert_equal 'invalid_json', response.dig('error', 'code')
       assert_equal '', trailing
+    end
+  end
+
+  def test_token_usage_returns_only_an_unavailable_summary_without_collector_config
+    with_temp_dir do |directory|
+      env = {
+        'HOME' => directory,
+        'TAB_OUT_PROXY_HOME' => File.join(directory, 'state'),
+        'TAB_OUT_CLASH_CONFIG_DIR' => File.join(directory, 'unused-clash'),
+        'TAB_OUT_MIHOMO_SOCKET' => File.join(directory, 'missing.sock')
+      }
+      request = { 'protocolVersion' => 1, 'command' => 'token_usage', 'payload' => {} }
+
+      response, trailing = decode_one_frame(run_host(env, framed(request)))
+
+      assert_equal true, response.fetch('ok')
+      assert_equal 'unavailable', response.dig('data', 'status')
+      assert_equal [], response.dig('data', 'days')
+      assert_equal '', trailing
+      refute File.exist?(File.join(directory, 'state', 'token-usage-history.md'))
     end
   end
 

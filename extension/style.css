@@ -81,6 +81,66 @@ header {
   text-transform: uppercase;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--warm-gray);
+  border-radius: 9px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.header-link:hover {
+  border-color: var(--accent-sage);
+  background: #f0f2ec;
+  transform: translateY(-1px);
+}
+
+.header-link:focus-visible {
+  outline: 2px solid var(--accent-sage);
+  outline-offset: 3px;
+}
+
+.header-link-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--card-bg);
+  font-family: 'Newsreader', serif;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.header-link-arrow {
+  margin-left: 2px;
+  color: var(--accent-sage);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.usage-link .header-link-mark { background: var(--accent-sage); }
+
+@media (max-width: 620px) {
+  .header-actions { flex-wrap: wrap; }
+}
+
 .language-picker {
   display: inline-flex;
   align-items: center;
@@ -1358,6 +1418,12 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .proxy-add:disabled,
 .proxy-retry:disabled,
 .proxy-rule-remove:disabled { opacity: 0.5; cursor: wait; }
+.browser-routing-controls { margin: 14px 0 20px; padding: 16px; border: 1px solid var(--warm-gray); border-radius: 10px; background: rgba(255,255,255,0.35); }
+.browser-routing-controls strong { font-size: 13px; }
+.browser-routing-controls p { font-size: 12px; line-height: 1.8; color: var(--muted); margin: 8px 0; overflow-wrap: anywhere; }
+.browser-routing-controls > div { display: flex; flex-wrap: wrap; gap: 10px; }
+.browser-routing-controls button { border: 1px solid var(--warm-gray); border-radius: 6px; padding: 8px 12px; background: transparent; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.browser-routing-controls button:disabled { opacity: 0.5; cursor: wait; }
 
 .proxy-keyword-warning {
   margin-top: 12px;
@@ -1622,7 +1688,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 @media (max-width: 620px) {
   .container { padding: 28px 18px 54px; }
   header { flex-wrap: wrap; gap: 12px; }
-  .language-picker { margin-left: auto; }
+  .header-actions { width: 100%; justify-content: space-between; gap: 10px; }
   .proxy-routing-panel { padding: 18px; }
   .proxy-form { grid-template-columns: 1fr; }
   .proxy-add { width: 100%; }

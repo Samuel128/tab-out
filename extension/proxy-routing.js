@@ -289,7 +289,7 @@ const TabOutProxyRouting = (() => {
     return {
       state,
       subscribe(listener) { onChange = listener; notify(); },
-      load() { return execute('status', {}); },
+      async load() { await execute('list', {}); return execute('status', {}); },
       list() { return execute('list', {}); },
       add(type, value) { return execute('add', { type, value }); },
       async remove(id) {

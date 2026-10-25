@@ -9,6 +9,7 @@ require 'tab_out_proxy/profile_manager'
 require 'tab_out_proxy/protocol'
 require 'tab_out_proxy/service'
 require 'tab_out_proxy/store'
+require 'tab_out_proxy/token_usage'
 
 STDIN.binmode
 STDOUT.binmode
@@ -30,9 +31,7 @@ clash_config_dir = File.expand_path(
     )
   )
 )
-socket_path = File.expand_path(
-  ENV.fetch('TAB_OUT_MIHOMO_SOCKET', '/tmp/verge/verge-mihomo.sock')
-)
+socket_paths = TabOutProxy::MihomoClient.local_socket_paths(override: ENV['TAB_OUT_MIHOMO_SOCKET'])
 
 store = TabOutProxy::Store.new(
   root: data_home,
@@ -42,11 +41,12 @@ profile_manager = TabOutProxy::ProfileManager.new(
   config_dir: clash_config_dir,
   provider_path: store.provider_path
 )
-client = TabOutProxy::MihomoClient.new(socket_path: socket_path)
+client = TabOutProxy::MihomoClient.new(socket_path: socket_paths.first, fallback_socket_paths: socket_paths.drop(1))
 service = TabOutProxy::Service.new(
   store: store,
   profile_manager: profile_manager,
-  mihomo_client: client
+  mihomo_client: client,
+  token_usage: TabOutProxy::TokenUsage.new(root: data_home)
 )
 
 begin

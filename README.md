@@ -36,6 +36,7 @@ The agent will walk you through it. Takes about 1 minute.
 - **Localhost grouping** shows port numbers next to each tab so you can tell your vibe coding projects apart
 - **Expandable groups** show the first 8 tabs with a clickable "+N more"
 - **English and Chinese UI** with a language preference shared by the dashboard and routing guide
+- **Token usage ledger** opens a separate read-only page with completed-day totals and local history
 - **100% local** your tab data never leaves your machine
 - **Optional proxy routing** uses a separately installed local host to manage Clash's `need-proxy` list; the current profile falls back to `DIRECT`
 
@@ -74,6 +75,20 @@ You open a new tab
 ```
 
 The tab dashboard runs inside the Chrome extension. It uses no external server or account, and saved tabs stay in `chrome.storage.local`. The optional proxy-routing controls communicate only with the separately installed local Native Messaging host.
+
+### Token usage page
+
+The **Token usage** link in the dashboard header opens a separate page. It first reads `token-usage-history.md` through the lightweight `token_usage_cached` native command and renders it immediately. The page then starts TokenCollector's `--query-local` completed-day scan and read-only `--query-wide` server query in the background; fresh results replace the cached view without a page reload. TokenCollector must already be installed and configured. Opening the page updates only private local cache files; it does not upload usage, change the normal upload schedule, or change proxy/VPN settings. Today's incomplete usage is excluded.
+
+Local collection fingerprints only the stable `~/.codex/skills` and `~/.codex/plugins` trees, so temporary Codex caches cannot stall a refresh. Each background collector runs in its own process group; if it exceeds the native host timeout, the host terminates the whole group instead of leaving a child scan running.
+
+The first successful visit scans and queries up to 365 completed days; subsequent page loads and manual refreshes update the latest 30 days. Server values remain authoritative. Local values fill a missing server date or raise a stale field by taking the larger value, never by adding the two sources together. Rows remain marked as `server`, `local`, or `combined` until a later scheduled upload is processed. Successful results atomically update `~/Library/Application Support/Tab Out Proxy/token-usage-history.md` (owner-only `0600`), outside Git. The archive is tied to an anonymous hash of the configured person, so switching people never merges their totals. Cached input is included in input tokens, not added a second time. Reload the extension and reinstall the native host after updating this feature: `ruby scripts/install-native-host`.
+
+Daily history can scan and query a selected range of up to 365 completed days; successful results update that date range in the local archive. The table can show 10, 20, 50, or 100 rows per page. Filtering and pagination do not change the summary totals above. A date missing from both sources remains blank rather than being invented as zero usage.
+
+The 7-day and 30-day summaries show recorded-day coverage, local-backfill days, and partial days. A missing date is left blank. Locally backfilled bars use an amber outline so provisional data is never presented as server-confirmed. The server upload still occurs only on TokenCollector's normal schedule; opening or refreshing this page never uploads data.
+
+TokenCollector keeps V2 upload outcomes in its private run history. After a successful daily upload, it automatically retries the oldest failed date range, one chunk of up to 30 completed days at a time. A retry is removed only after V2 accepts it. Exact manual recovery is also available through `python3 scripts/upgrade.py --run --start-date YYYY-MM-DD --end-date YYYY-MM-DD`; both dates are required.
 
 ### Optional macOS proxy-routing host
 
@@ -117,6 +132,24 @@ Uninstalling preserves the managed rules data by default, so reinstalling can re
 
 ### Proxy routing architecture
 
+#### Browser Whitelist (Optional)
+
+Reload the existing unpacked Tab Out extension after updating, then click **Enable browser whitelist** in the proxy panel and approve Chrome's optional `proxy` permission. This is a separate opt-in: installing the native host or reading the whitelist never enables browser proxy control automatically.
+
+The inline browser PAC returns `DIRECT` for non-listed hosts, local/private addresses and protected internal suffixes. When Clash's API and configured HTTP listener are available, exact, suffix or keyword whitelist matches return `PROXY 127.0.0.1:<configured HTTP port>; DIRECT`. Matching uses the hostname, not the URL path, and performs no DNS lookups inside PAC. DIRECT fallback handles a proxy stopping between health checks. If Clash is unavailable, Tab Out keeps browser proxy ownership using Chrome's explicit `direct` mode for **all** domains, bypassing even a stopped system HTTP proxy. This availability-first policy intentionally allows listed domains to connect without a proxy; it is not a fail-closed privacy boundary.
+
+The read-only `routing_snapshot` native command reads validated local rules, protected suffixes and the configured proxy port, checks the local Clash API and TCP listener within a bounded timeout, and never reloads or changes profiles. An `alarms` permission supports periodic health checks (scheduled every 30 seconds; Chrome may delay them), also refreshed on worker startup, new tabs and list changes. Unchanged checks do not reset the PAC. A missing, outdated or unresponsive helper switches to explicit browser DIRECT with a visible warning and automatic recovery on a later successful check. Fatal PAC errors also recover to DIRECT. Browser settings are verified after applying and refused when controlled by another extension or enterprise policy. **Return to system proxy** deliberately releases Tab Out's browser setting; if the original system proxy is still enabled but stopped, ordinary websites may fail again.
+
+Scope is Chrome's proxy layer, not macOS networking. A system-wide TUN, VPN, firewall or DNS interceptor can still affect DIRECT connections. Internal sites require the appropriate corporate network/VPN and DNS. This feature does not change those settings or guarantee that every non-listed website is reachable. Live activation requires reloading the extension and granting permission; code tests alone do not prove the active user profile has enabled it.
+
+For **browser-only whitelisting with other apps direct**, keep Clash running as a local HTTP proxy but switch off its **system proxy** and **TUN**. Chrome's opt-in PAC then sends only listed browser domains to its local port; other apps do not automatically inherit this browser whitelist. This setup must be chosen explicitly, not silently applied by installing the host. Corporate DNS previously configured only inside Clash must be provided independently for internal domains, with corporate network/VPN access retained. A successful DNS lookup alone does not prove the internal service is reachable.
+
+The native host discovers current Clash Verge service-mode sockets under `/var/run/clash-verge-service/users/<uid>/`, then checks the user's temporary socket and the older `/tmp/verge/` location. `TAB_OUT_MIHOMO_SOCKET` remains an exclusive explicit override, with no automatic fallback, including in isolated tests. The helper must not infer that Clash is stopped merely because its old socket path is absent.
+
+The dashboard reads the saved list before attempting synchronization, so an unavailable core or failed sync does not hide local rules or mark them applied. If service mode rejects the config file as outside its working directory, the helper retries only that classified error using Mihomo's supported inline YAML payload and an inline classical whitelist provider. It does not expand `SAFE_PATHS`, relocate private config, or change DNS/TUN settings. Only the managed whitelist may select a proxy: other subscription and override proxy rules are removed from the effective rules and suppressed in overrides; DIRECT and REJECT rules remain, and the downloaded subscription is untouched. This assumes Clash's **Rule** mode; Global mode bypasses rule-based routing. Reload the extension after updating its worker; a missing receiver now explicitly requests a reload instead of presenting a cryptic connection error.
+
+浏览器白名单分流：更新后在 `chrome://extensions` 重载原 Tab Out；尚未启用时，在分流面板点击“启用浏览器白名单”，授予一次可选代理权限。名单外、私有地址及受保护内网域名始终直连；名单内仅在 Clash 本地代理可用时优先代理，连接失败允许回退直连。Clash 关闭或助手检测失败时，由扩展接管浏览器为全直连，而不是恢复失效的系统代理；恢复后自动切回白名单分流。后台定期检测，页面展示代理在线状态与分流生效状态。此规则优先保障可用性，不适合要求代理故障时禁止直连的隐私场景。不会修改系统代理、VPN、TUN 或 DNS，企业策略和底层网络仍可能影响访问。
+
 The **Proxy routing** panel is below **Open tabs** on the new-tab page. Its **[How routing works](extension/architecture.html)** link opens a separate architecture guide inside the extension. The guide and dashboard use the same English/Chinese preference. The panel shows the current list and sync status; the guide explains the design, not a snapshot of your live list.
 
 Clash does not read text from the Tab Out form directly. A change follows this path:
@@ -140,7 +173,7 @@ RULE-SET,need-proxy,PROXY       # domains managed in Tab Out
 MATCH,DIRECT                    # fallback after the remaining direct rules
 ```
 
-Known internal domains have separate `DIRECT` rules from the local private file ahead of the Tab Out list. The `*.example` names above are illustrative placeholders, not configured rules. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. With the macOS system proxy enabled, a `DIRECT` request may still enter local Clash before going out directly. Fully bypassing Clash for non-listed domains would require a separate PAC or system-proxy setup.
+Known internal domains have separate `DIRECT` rules from the local private file ahead of the Tab Out list. The `*.example` names above are illustrative placeholders, not configured rules. Removing a domain from Tab Out returns it to direct routing; it does **not** block the website. Legacy Clash-only routing may still enter local Clash through the macOS system proxy. Enable the optional Browser Whitelist above to bypass that HTTP proxy for non-listed domains; system-wide TUN/VPN/DNS handling remains separate.
 
 ### Privacy check before commits
 
@@ -201,6 +234,7 @@ https://github.com/Samuel128/tab-out
 - **本地服务分组**：显示 localhost 的端口，便于区分开发项目。
 - **展开更多**：每组先显示 8 个页面，其余可展开查看。
 - **中英双语**：仪表盘与分流原理页共用语言偏好。
+- **Token 使用记录**：从顶部入口打开独立页面，查看完整自然日的汇总和本机历史。
 - **数据留在本机**：标签页数据不依赖云端账号或服务器。
 - **可选代理分流**：通过单独安装的本地助手管理 Clash 的 <code>need-proxy</code> 名单；当前配置的兜底规则为 <code>DIRECT</code>。
 
@@ -226,6 +260,20 @@ https://github.com/Samuel128/tab-out
 ~~~
 
 仪表盘运行在 Chrome 扩展内部，不需要外部服务器或账号。“稍后查看”的数据存放在 <code>chrome.storage.local</code>。代理分流控制仅与另行安装的本地 Native Messaging 助手通信。
+
+### Token 使用情况页面
+
+点击仪表盘顶部的“Token 使用情况”，会打开独立页面。页面先通过轻量的 <code>token_usage_cached</code> 本地命令读取 <code>token-usage-history.md</code> 并立即展示，再在后台执行 TokenCollector 的完整自然日本机扫描 <code>--query-local</code> 和只读服务端查询 <code>--query-wide</code>；新结果返回后原位更新，无需重新加载页面。TokenCollector 需事先安装并配置好。打开页面只更新私有本机缓存，不会上报用量、不改变原有定时上报计划，也不会修改代理/VPN。**当天未结束的数据不计入**。
+
+本机统计只为稳定的 <code>~/.codex/skills</code> 与 <code>~/.codex/plugins</code> 目录建立指纹，不会遍历 Codex 临时缓存而拖慢刷新。每个后台采集器都运行在独立进程组中；超过本机助手的超时时间后会清理整组进程，不会残留子扫描任务。
+
+首次成功打开时，本机扫描和服务端查询最多覆盖 365 个完整自然日；之后每次打开和手动刷新都会更新最近 30 天。服务端值保持权威；本地值只补服务端缺失日期，或通过逐字段取较大值抬升尚未处理的旧值，不会把两份数据相加。记录会标记为 <code>server</code>、<code>local</code> 或 <code>combined</code>，直到后续定时上报完成处理。本机历史文件为 <code>~/Library/Application Support/Tab Out Proxy/token-usage-history.md</code>，位于 Git 仓库外，原子写入且仅当前用户可读（<code>0600</code>）。历史以人员匿名哈希隔离，缓存输入 Token 不重复计入总量。更新此功能后，请重新加载扩展，并再次运行 <code>ruby scripts/install-native-host</code> 更新本地助手。
+
+“每日历史”可对最多 365 个完整自然日的指定日期段发起本机扫描和服务端查询；成功后会更新本机历史中对应日期段的数据。表格每页可选 10、20、50 或 100 条。筛选与翻页不会改变上方汇总；两个来源都缺失的日期不会被编造成零用量。
+
+最近 7 天和 30 天汇总同时显示有记录天数、本地回补天数和部分覆盖天数。缺失日期在图表中留空；本地回补柱使用琥珀色描边，不会伪装成服务端已确认数据。服务端上报仍只按 TokenCollector 原有计划执行，打开或刷新页面不会触发上报。
+
+TokenCollector 会在私有运行历史中保留 V2 上传结果。每日正常上传成功后，会自动补报最早的失败日期范围，每次最多处理 30 个完整自然日；只有 V2 接收成功才会移除该缺口。也可通过 <code>python3 scripts/upgrade.py --run --start-date YYYY-MM-DD --end-date YYYY-MM-DD</code> 手动精确补报，开始和结束日期必须同时提供。
 
 ### 可选的 macOS 代理分流助手
 
@@ -282,7 +330,7 @@ Clash 不会直接读取 Tab Out 输入框。新增或删除规则时，链路�
    ~~~
 
 3. Clash 的当前配置把该文件注册为本地 <code>rule-providers.need-proxy</code>，通过 <code>RULE-SET,need-proxy,PROXY</code> 将命中的域名交给 <code>PROXY</code> 策略组。支持“域名后缀”(<code>DOMAIN-SUFFIX</code>)、“精确域名”(<code>DOMAIN</code>) 和“域名包含”(<code>DOMAIN-KEYWORD</code>)；“包含”的匹配范围较广。
-4. 助手通过 Mihomo 的本地 Unix socket 重载 Clash 当前配置、刷新 <code>need-proxy</code>，并核对 Clash 已加载的规则数量与保存的名单一致。验证通过后，Tab Out 才显示“已生效”；Clash 暂不可用时显示“等待 Clash”，稍后可重试。验证失败时会回滚改动。
+4. 助手通过 Mihomo 的本地 Unix socket 重载 Clash 当前配置，核对已加载规则数量。若服务模式拒绝工作目录外的配置路径，仅对该错误改用官方支持的内联 YAML 和内联名单，不扩大安全路径权限；文件型名单刷新，内联型无需文件刷新。验证通过后才显示“已生效”；Clash 暂不可用时显示“等待 Clash”，验证失败回滚。界面先读取本地名单，同步失败仍可查看，状态不会冒充已生效。
 
 当前配置的简化匹配顺序如下：
 
@@ -292,7 +340,9 @@ RULE-SET,need-proxy,PROXY               # Tab Out 管理的代理名单
 MATCH,DIRECT                            # 剩余直连规则之后的兜底
 ~~~
 
-上面的 <code>*.example</code> 是占位示例，不是实际配置。内网域名从本机私有文件读取，形成排在 Tab Out 名单之前的 <code>DIRECT</code> 规则。从 Tab Out 删除域名只会让它恢复直连，**不会**封禁网站。开启 macOS 系统代理时，请求也可能先进入本机 Clash，再由 <code>DIRECT</code> 直连出站；如果要让未列入名单的域名完全绕过 Clash，需要另行配置 PAC 或系统代理。
+上面的 <code>*.example</code> 是占位示例，不是实际配置。内网域名从本机私有文件读取，形成排在 Tab Out 名单之前的 <code>DIRECT</code> 规则。从 Tab Out 删除域名只会让它恢复直连，**不会**封禁网站。旧的 Clash 规则模式仍可能先经过系统 HTTP 代理；启用新增的“浏览器白名单分流”后，名单外请求可绕过该 HTTP 代理。系统 TUN、VPN 和 DNS 不属于浏览器分流的控制范围。
+
+仅管理的白名单能指定代理：生效配置与覆盖文件会排除订阅、覆盖规则中的其他代理策略，保留 DIRECT 和 REJECT 规则，不修改下载的订阅原件。这以 Clash 的规则模式为前提，全局模式会绕过规则。公司 DNS 如果只在 Clash 里配置，关 TUN 后系统可能无法解析内网域名；需要独立的公司域名 DNS 分流，不能用“加入代理白名单”代替。该助手不自动修改系统 DNS。若显示“浏览器分流后台未响应”，请在扩展管理页重载原 Tab Out，再刷新页面。
 
 ### 提交前隐私检查
 

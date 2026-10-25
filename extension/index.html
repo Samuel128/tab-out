@@ -26,9 +26,16 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
-    <label class="language-picker"><span data-i18n="Language">Language</span>
-      <select id="languageSelect" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
-    </label>
+    <div class="header-actions">
+      <a class="header-link usage-link" href="usage.html" target="_blank" rel="noopener noreferrer" aria-label="Open Token usage" data-i18n-aria-label="Open Token usage">
+        <span class="header-link-mark" aria-hidden="true">T</span>
+        <span data-i18n="Token usage">Token usage</span>
+        <span class="header-link-arrow" aria-hidden="true">↗</span>
+      </a>
+      <label class="language-picker"><span data-i18n="Language">Language</span>
+        <select id="languageSelect" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
+      </label>
+    </div>
   </header>
 
   <!-- ================================================================
@@ -83,6 +90,13 @@
           <button type="button" class="proxy-retry" data-action="proxy-retry" data-i18n="Retry">Retry</button>
         </div>
         <div class="proxy-last-sync" id="proxyLastSync">Last sync: —</div>
+        <div class="browser-routing-controls">
+          <strong data-i18n="Browser whitelist routing">Browser whitelist routing</strong>
+          <p data-i18n="Listed domains use Clash only while its local proxy is available; otherwise they connect directly. All other domains always bypass the system proxy. VPN and TUN settings are not changed.">Listed domains use Clash only while its local proxy is available; otherwise they connect directly. All other domains always bypass the system proxy. VPN and TUN settings are not changed.</p>
+          <p id="browserRoutingStatus" role="status" aria-live="polite"></p>
+          <div><button id="browserRoutingEnable" type="button" data-i18n="Enable browser whitelist">Enable browser whitelist</button><button id="browserRoutingDisable" type="button" data-i18n="Return to system proxy" hidden>Return to system proxy</button></div>
+          <p id="browserRoutingTun" hidden data-i18n="TUN is configured in Clash. Browser DIRECT bypasses the HTTP proxy, not system-wide tunnels or DNS interception. Internal sites still require the company network or VPN.">TUN is configured in Clash. Browser DIRECT bypasses the HTTP proxy, not system-wide tunnels or DNS interception. Internal sites still require the company network or VPN.</p>
+        </div>
         <form class="proxy-form" id="proxyForm">
           <label class="proxy-field"><span data-i18n="Match">Match</span>
             <select id="proxyMatchType" name="type">
@@ -197,7 +211,9 @@
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="tab-state.js"></script>
 <script src="i18n.js"></script>
-<script src="proxy-routing.js"></script>
+  <script src="proxy-routing.js"></script>
+  <script src="browser-routing.js"></script>
+  <script src="browser-routing-ui.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token usage · Tab Out</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="architecture.css">
+  <link rel="stylesheet" href="usage.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="index.html"><span class="brand-mark">T</span><span>Tab Out</span></a>
+      <div class="top-actions">
+        <a class="back-link" href="index.html" data-i18n="Back to Tab Out">Back to Tab Out</a>
+        <label class="language-picker"><span data-i18n="Language">Language</span>
+          <select id="languageSelect" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="zh">中文</option></select>
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <section class="usage-hero">
+        <div>
+          <p class="eyebrow">TAB OUT / TOKENCOLLECTOR</p>
+          <h1 data-i18n="Token usage">Token usage</h1>
+          <p class="usage-deck" data-i18n="A private ledger of your completed-day Token activity.">A private ledger of your completed-day Token activity.</p>
+          <div class="usage-meta"><span id="personName"></span><span id="usageStatus" role="status" aria-live="polite" data-i18n="Checking TokenCollector…">Checking TokenCollector…</span></div>
+        </div>
+        <button type="button" id="refreshUsage" class="refresh-button" data-i18n="Refresh now">Refresh now</button>
+      </section>
+
+      <section class="usage-summary" aria-label="Usage overview" data-i18n-aria-label="Usage overview">
+        <article class="summary-card featured"><p data-i18n="Last 7 days">Last 7 days</p><strong id="total7">—</strong><span data-i18n="Tokens">Tokens</span></article>
+        <article class="summary-card"><p data-i18n="Last 30 days">Last 30 days</p><strong id="total30">—</strong><span data-i18n="Tokens">Tokens</span></article>
+        <article class="summary-card"><p data-i18n="All recorded">All recorded</p><strong id="totalAll">—</strong><span data-i18n="Tokens">Tokens</span></article>
+      </section>
+
+      <div class="usage-details">
+        <span><span data-i18n="Cached input">Cached input</span> · 7d <strong id="cached7">—</strong></span>
+        <span><span data-i18n="Recorded days">Recorded days</span> · 7d <strong id="coverage7">—</strong></span>
+        <span><span data-i18n="Recorded days">Recorded days</span> · 30d <strong id="coverage30">—</strong></span>
+        <span><span data-i18n="Local backfill days">Local backfill days</span> <strong id="localBackfillDays">—</strong></span>
+        <span><span data-i18n="Partial days">Partial days</span> <strong id="partialDays">—</strong></span>
+        <span><span data-i18n="Through">Through</span> <strong id="throughDate">—</strong></span>
+        <span><span data-i18n="Updated">Updated</span> <strong id="lastUpdated">—</strong></span>
+      </div>
+
+      <section class="chart-section">
+        <div class="section-heading"><div><p class="eyebrow">01 / 14 DAYS</p><h2 data-i18n="Daily rhythm">Daily rhythm</h2></div><span data-i18n="Latest 14 completed days">Latest 14 completed days</span></div>
+        <div class="usage-chart" id="usageChart" role="img" aria-label="Daily Token totals" data-i18n-aria-label="Daily Token totals"></div>
+        <p class="chart-note" data-i18n="Missing dates stay blank. Amber outlines identify local backfill that has not yet been confirmed by the server.">Missing dates stay blank. Amber outlines identify local backfill that has not yet been confirmed by the server.</p>
+      </section>
+
+      <section class="history-section">
+        <div class="section-heading"><div><p class="eyebrow">02 / ARCHIVE</p><h2 data-i18n="Daily history">Daily history</h2></div><span data-i18n="Local history">Local history</span></div>
+        <form class="history-filter" id="historyFilter" novalidate>
+          <div class="date-field"><label for="historyStart" data-i18n="From date">From date</label><input id="historyStart" type="date"></div>
+          <div class="date-field"><label for="historyEnd" data-i18n="To date">To date</label><input id="historyEnd" type="date"></div>
+          <button type="submit" id="queryHistory" class="filter-submit" data-i18n="Query range">Query range</button>
+          <button type="button" id="clearHistory" class="filter-clear" data-i18n="Clear">Clear</button>
+          <p class="filter-hint" data-i18n="Query up to 365 completed days. Results update the local Markdown archive.">Query up to 365 completed days. Results update the local Markdown archive.</p>
+        </form>
+        <p class="history-feedback" id="historyFeedback" role="status" aria-live="polite" hidden></p>
+        <div class="table-scroll"><table><thead><tr>
+          <th data-i18n="Date">Date</th><th data-i18n="Input">Input</th><th data-i18n="Cached input">Cached input</th><th data-i18n="Output">Output</th><th data-i18n="Total">Total</th><th data-i18n="Sessions">Sessions</th><th data-i18n="Turns">Turns</th><th data-i18n="Source">Source</th>
+        </tr></thead><tbody id="historyRows"></tbody></table></div>
+        <p class="empty-history" id="emptyHistory" data-i18n="No history yet. Open this page again after TokenCollector reports data.">No history yet. Open this page again after TokenCollector reports data.</p>
+        <div class="history-pager">
+          <div class="pager-size"><label for="historyPageSize" data-i18n="Rows per page">Rows per page</label><select id="historyPageSize" aria-label="Rows per page" data-i18n-aria-label="Rows per page"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></div>
+          <span class="pager-count" id="historyCount" aria-live="polite"></span>
+          <div class="pager-actions"><button type="button" id="historyPrev" data-i18n="Previous">Previous</button><span id="historyPage"></span><button type="button" id="historyNext" data-i18n="Next">Next</button></div>
+        </div>
+      </section>
+
+      <section class="usage-explainer" id="usageHowItWorks" aria-labelledby="usageHowItWorksTitle">
+        <div class="section-heading"><div><p class="eyebrow">03 / HOW IT WORKS</p><h2 id="usageHowItWorksTitle" data-i18n="How these numbers arrive">How these numbers arrive</h2></div></div>
+        <p class="explainer-intro" data-i18n="The page combines a server query, an on-demand local scan, and a private Markdown archive. Opening it never uploads Token data.">The page combines a server query, an on-demand local scan, and a private Markdown archive. Opening it never uploads Token data.</p>
+        <div class="usage-flow">
+          <article class="flow-step">
+            <span class="flow-number">01</span>
+            <h3 data-i18n="Install TokenCollector separately">Install TokenCollector separately</h3>
+            <p data-i18n="First install and configure the TokenCollector skill on this computer. Tab Out does not install it or manage your company network connection.">First install and configure the TokenCollector skill on this computer. Tab Out does not install it or manage your company network connection.</p>
+            <code>~/.codex/skills/TokenCollector</code>
+          </article>
+          <article class="flow-step">
+            <span class="flow-number">02</span>
+            <h3 data-i18n="Show cache, then refresh in background">Show cache, then refresh in background</h3>
+            <p data-i18n="The saved Markdown history renders first. Tab Out then runs TokenCollector's local completed-day scan and read-only server query in the background, replacing the view when fresh data arrives. Scheduled upload remains unchanged.">The saved Markdown history renders first. Tab Out then runs TokenCollector's local completed-day scan and read-only server query in the background, replacing the view when fresh data arrives. Scheduled upload remains unchanged.</p>
+            <code>--query-local + --query-wide</code>
+          </article>
+          <article class="flow-step">
+            <span class="flow-number">03</span>
+            <h3 data-i18n="Merge and display local history">Merge and display local history</h3>
+            <p data-i18n="Server totals stay authoritative. Local totals fill missing dates or raise stale values without double-counting, and their source remains marked until a later scheduled upload is processed. The merged result updates the Markdown archive.">Server totals stay authoritative. Local totals fill missing dates or raise stale values without double-counting, and their source remains marked until a later scheduled upload is processed. The merged result updates the Markdown archive.</p>
+            <p data-i18n="Show saved history when the query is unavailable">Show saved history when the query is unavailable</p>
+            <code>~/Library/Application Support/Tab Out Proxy/token-usage-history.md</code>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer><span data-i18n="Completed days only. Cached input is part of input tokens, not an extra amount.">Completed days only. Cached input is part of input tokens, not an extra amount.</span><span data-i18n="Source: TokenCollector server query + local scan + private Markdown archive.">Source: TokenCollector server query + local scan + private Markdown archive.</span></footer>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="usage.js"></script>
+</body>
+</html>

@@ -97,6 +97,39 @@ class ProfileManagerTest < Minitest::Test
     paths.each { |path| assert_equal first.fetch(path), File.binread(path) }
   end
 
+  def test_only_managed_whitelist_can_select_a_proxy_and_reject_rules_survive
+    outbound = ['DOMAIN-SUFFIX,other.example,PROXY', 'RULE-SET,remote-list,OtherGroup', 'AND,((NETWORK,TCP),(DST-PORT,443)),OtherGroup']
+    safe = ['DOMAIN-SUFFIX,blocked.example,REJECT', 'IP-CIDR,192.0.2.0/24,REJECT-DROP,no-resolve']
+    remote_path = profile_path('remote-profile.json')
+    remote = load_yaml(remote_path)
+    remote['rules'].insert(0, *outbound, *safe)
+    File.write(remote_path, YAML.dump(remote))
+    remote_before = File.binread(remote_path)
+    active_path = File.join(@directory, 'clash-verge.yaml')
+    active = load_yaml(active_path)
+    active['rules'].insert(0, *outbound, *safe)
+    File.write(active_path, YAML.dump(active))
+    overrides = load_yaml(profile_path('rules-override.yaml'))
+    overrides['prepend'].concat(outbound + safe)
+    overrides['append'].concat(outbound + safe)
+    File.write(profile_path('rules-override.yaml'), YAML.dump(overrides))
+
+    @manager.ensure_integrated!
+
+    integrated = load_yaml(active_path)
+    outbound.each { |rule| refute_includes integrated['rules'], rule }
+    safe.each { |rule| assert_includes integrated['rules'], rule }
+    override = load_yaml(profile_path('rules-override.yaml'))
+    outbound.each do |rule|
+      assert_includes override['delete'], rule
+      refute_includes override['prepend'], rule
+      refute_includes override['append'], rule
+    end
+    safe.each { |rule| assert_includes override['prepend'], rule }
+    assert_equal remote_before, File.binread(remote_path)
+    assert_equal 'MATCH,DIRECT', integrated['rules'].last
+  end
+
   def test_unrelated_need_proxy_provider_in_merge_or_active_is_rejected_without_writes
     managed_paths.first(1).concat([managed_paths.last]).each do |path|
       original = File.binread(path)

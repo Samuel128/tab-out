@@ -7,6 +7,23 @@ require 'tab_out_proxy/service'
 require 'tab_out_proxy/store'
 
 class ServiceTest < Minitest::Test
+  def test_routing_snapshot_reads_health_without_reloading_clash_or_changing_rules
+    with_temp_dir do |dir|
+      store = TabOutProxy::Store.new(root: File.join(dir, 'state'))
+      client = FakeClient.new(online: false)
+      profile = Object.new
+      def profile.browser_proxy_info; { 'proxyPort' => 7897, 'tunConfigured' => true }; end
+      service = TabOutProxy::Service.new(store: store, profile_manager: profile, mihomo_client: client)
+      data = service.call('routing_snapshot')
+      assert_equal 7897, data.fetch('proxyPort')
+      assert_equal false, data.fetch('clashAvailable')
+      assert_equal [], data.fetch('rules')
+      assert_includes data.fetch('protectedSuffixes'), 'internal.example'
+      assert_equal [[:proxy_available, 7897]], client.calls
+      refute store.initialized?
+      assert_raises(TabOutProxy::ValidationError) { service.call('routing_snapshot', 'port' => 1234) }
+    end
+  end
   FIXTURES = File.expand_path('fixtures', __dir__)
   FIXED_TIME = Time.utc(2026, 9, 16, 8, 30, 0)
   HEALTHY_PROVIDER = {
@@ -38,7 +55,12 @@ class ServiceTest < Minitest::Test
       online
     end
 
-    def reload_config(path)
+    def proxy_available?(port)
+      @calls << [:proxy_available, port]
+      online
+    end
+
+    def reload_config(path, **_options)
       @calls << [:reload_config, path]
       raise_failure(:reload_config)
       {}
@@ -74,7 +96,7 @@ class ServiceTest < Minitest::Test
       @reload_count = 0
     end
 
-    def reload_config(path)
+    def reload_config(path, **_options)
       @calls << [:reload_config, path]
       @reload_count += 1
       return {} unless @reload_count == 1
@@ -117,6 +139,29 @@ class ServiceTest < Minitest::Test
     ], @client.calls
   end
 
+  def test_inline_provider_is_verified_without_requesting_a_file_refresh
+    @client.provider_result = HEALTHY_PROVIDER.merge('vehicleType' => 'Inline')
+    @client.define_singleton_method(:reload_config) do |path, **options|
+      calls << [:reload_config, path]
+      raise 'Authoritative rules were not supplied' unless options[:inline_rules] == ['DOMAIN-SUFFIX,proxy.example']
+      { 'inlineProvider' => true }
+    end
+    result = @service.call('add', 'type' => 'suffix', 'value' => 'proxy.example')
+    assert_equal 'active', result.fetch('status')
+    refute_includes @client.calls.map(&:first), :refresh_provider
+    assert @store.synced?
+  end
+
+  def test_local_list_remains_readable_with_an_unsupported_profile
+    @store.add(type: 'suffix', value: 'proxy.example')
+    File.write(File.join(@clash_directory, 'profiles.yaml'), YAML.dump('current' => 'missing', 'items' => []))
+    result = @service.call('list')
+    assert_equal 'stored', result.fetch('status')
+    assert_equal ['proxy.example'], result.fetch('rules').map { |r| r.fetch('value') }
+    assert_nil result.fetch('profile')
+    assert_empty @client.calls
+  end
+
   def test_first_run_status_and_list_do_not_create_state_or_touch_clash
     before = profile_contents
 
@@ -132,6 +177,47 @@ class ServiceTest < Minitest::Test
     refute File.exist?(File.dirname(@store.state_path))
     assert_equal before, profile_contents
     assert_empty @client.calls
+  end
+
+  def test_token_usage_is_read_only_and_rejects_client_filters
+    usage = Object.new
+    usage.define_singleton_method(:call) { { 'status' => 'fresh', 'days' => [] } }
+    usage.define_singleton_method(:cached) { { 'status' => 'cached', 'days' => [] } }
+    service = TabOutProxy::Service.new(
+      store: @store, profile_manager: @manager, mihomo_client: @client,
+      token_usage: usage
+    )
+
+    assert_equal({ 'status' => 'fresh', 'days' => [] }, service.call('token_usage'))
+    assert_equal({ 'status' => 'cached', 'days' => [] }, service.call('token_usage_cached'))
+    error = assert_raises(TabOutProxy::ValidationError) do
+      service.call('token_usage', 'personnel' => 'another person')
+    end
+    assert_equal 'invalid_request', error.code
+    assert_raises(TabOutProxy::ValidationError) do
+      service.call('token_usage_cached', 'refresh' => true)
+    end
+    assert_empty @client.calls
+    refute File.exist?(@store.state_path)
+  end
+
+  def test_token_usage_range_accepts_only_two_dates_without_touching_proxy_state
+    usage = Object.new
+    usage.define_singleton_method(:call_range) do |start_date:, end_date:|
+      { 'startDate' => start_date, 'endDate' => end_date }
+    end
+    service = TabOutProxy::Service.new(
+      store: @store, profile_manager: @manager, mihomo_client: @client,
+      token_usage: usage
+    )
+
+    assert_equal({ 'startDate' => '2026-09-01', 'endDate' => '2026-09-10' },
+                 service.call('token_usage_range', 'startDate' => '2026-09-01', 'endDate' => '2026-09-10'))
+    assert_raises(TabOutProxy::ValidationError) do
+      service.call('token_usage_range', 'startDate' => '2026-09-01', 'endDate' => '2026-09-10', 'personnel' => 'someone')
+    end
+    assert_empty @client.calls
+    refute File.exist?(@store.state_path)
   end
 
   def test_status_after_verified_activation_does_not_reload_unchanged_config

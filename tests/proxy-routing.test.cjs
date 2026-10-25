@@ -85,6 +85,7 @@ test('manual add explicitly transitions first-run routing from inactive to activ
   assert.equal(controller.state().data.status, 'active');
   assert.deepEqual(controller.state().data.rules, [rule]);
   assert.deepEqual(calls.map(call => [call.command, call.payload]), [
+    ['list', {}],
     ['status', {}],
     ['add', { type: 'suffix', value: 'example.com' }],
   ]);
@@ -250,7 +251,7 @@ test('controller loads authoritative rules and does not fake successful add', as
   const calls = [];
   const controller = ProxyRouting.createController(async (command, payload) => {
     calls.push([command, payload]);
-    if (command === 'status') return { status: 'active', rules: [], syncedAt: '2026-09-16T00:00:00Z' };
+    if (command === 'list' || command === 'status') return { status: command === 'list' ? 'stored' : 'active', rules: [], syncedAt: '2026-09-16T00:00:00Z' };
     throw Object.assign(new Error('Helper not available'), { code: 'helper_unavailable' });
   });
   await controller.load();
@@ -258,7 +259,7 @@ test('controller loads authoritative rules and does not fake successful add', as
   await assert.rejects(controller.add('suffix', 'example.com'), /Helper not available/);
   assert.deepEqual(controller.state().data.rules, []);
   assert.equal(controller.state().error.code, 'helper_unavailable');
-  assert.deepEqual(calls.map(([command]) => command), ['status', 'add']);
+  assert.deepEqual(calls.map(([command]) => command), ['list', 'status', 'add']);
 });
 
 test('controller removes a rule and offers five seconds to undo', async () => {
@@ -284,7 +285,22 @@ test('controller removes a rule and offers five seconds to undo', async () => {
   assert.equal(controller.state().data.rules.length, 1);
   assert.equal(controller.state().undo, null);
   assert.equal(timers.size, 0);
-  assert.deepEqual(calls.map(([command]) => command), ['status', 'remove', 'add']);
+  assert.deepEqual(calls.map(([command]) => command), ['list', 'status', 'remove', 'add']);
+});
+
+test('initial sync failure keeps authoritative local rules visible and reports unverified status', async () => {
+  const rule = { id: 'fixture', type: 'suffix', value: 'proxy.example' };
+  const calls = [];
+  const controller = ProxyRouting.createController(async command => {
+    calls.push(command);
+    if (command === 'list') return { status: 'stored', rules: [rule], syncedAt: null };
+    throw new Error('Clash API returned HTTP 400');
+  });
+  await assert.rejects(controller.load(), /400/);
+  assert.deepEqual(calls, ['list', 'status']);
+  assert.deepEqual(controller.state().data.rules, [rule]);
+  assert.match(controller.state().error.message, /400/);
+  assert.match(ProxyRouting.renderRuleRows(controller.state().data.rules, 'error'), /Unverified/);
 });
 
 test('failed Undo add restores a five-second retry window', async () => {

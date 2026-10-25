@@ -8,10 +8,11 @@ module TabOutProxy
   class Service
     PROTOCOL_VERSION = 1
 
-    def initialize(store:, profile_manager:, mihomo_client:, clock: -> { Time.now })
+    def initialize(store:, profile_manager:, mihomo_client:, token_usage: nil, clock: -> { Time.now })
       @store = store
       @profile_manager = profile_manager
       @mihomo_client = mihomo_client
+      @token_usage = token_usage
       @clock = clock
     end
 
@@ -21,6 +22,28 @@ module TabOutProxy
       end
 
       case command
+      when 'routing_snapshot'
+        raise ValidationError.new('invalid_request', 'Routing snapshot requires an empty payload') unless payload.empty?
+        with_transaction_lock do
+          info = @profile_manager.browser_proxy_info
+          info.merge(
+            'clashAvailable' => @mihomo_client.proxy_available?(info.fetch('proxyPort')),
+            'rules' => @store.list.map(&:to_h),
+            'protectedSuffixes' => PrivateRouting.domain_suffixes
+          )
+        end
+      when 'token_usage', 'token_usage_cached'
+        raise ValidationError.new('invalid_request', 'Token usage does not accept filters') unless payload.empty?
+        raise ValidationError.new('usage_unavailable', 'Token usage is not configured') unless @token_usage
+
+        command == 'token_usage' ? @token_usage.call : @token_usage.cached
+      when 'token_usage_range'
+        unless payload.keys.sort == %w[endDate startDate]
+          raise ValidationError.new('invalid_request', 'Token usage range accepts only start and end dates')
+        end
+        raise ValidationError.new('usage_unavailable', 'Token usage is not configured') unless @token_usage
+
+        @token_usage.call_range(start_date: payload.fetch('startDate'), end_date: payload.fetch('endDate'))
       when 'status'
         return response('inactive', nil, nil) unless @store.initialized?
 
@@ -29,7 +52,7 @@ module TabOutProxy
         return response('stored', nil, nil) unless @store.initialized?
 
         with_transaction_lock do
-          response('stored', @profile_manager.profile_info, nil)
+          response('stored', safe_profile_info, nil)
         end
       when 'add'
         type = payload.fetch('type')
@@ -83,8 +106,8 @@ module TabOutProxy
         return response('active', profile, @clock.call.utc.iso8601)
       end
 
-      @mihomo_client.reload_config(@profile_manager.active_config_path)
-      @mihomo_client.refresh_provider('need-proxy')
+      applied = @mihomo_client.reload_config(@profile_manager.active_config_path, inline_rules: @store.list.map(&:provider_line))
+      @mihomo_client.refresh_provider('need-proxy') unless applied.is_a?(Hash) && applied['inlineProvider']
       provider = @mihomo_client.provider('need-proxy')
       unless healthy_provider?(provider)
         raise SyncError.new('provider_verification_failed', 'Clash did not verify the need-proxy provider')
@@ -112,7 +135,7 @@ module TabOutProxy
         provider['name'] == 'need-proxy' &&
         provider['type'] == 'Rule' &&
         provider['behavior'] == 'Classical' &&
-        provider['vehicleType'] == 'File' &&
+        %w[File Inline].include?(provider['vehicleType']) &&
         provider['ruleCount'].is_a?(Integer) &&
         provider['ruleCount'] == @store.list.length
     end
@@ -126,8 +149,8 @@ module TabOutProxy
     def restore_running_config
       return unless @mihomo_client.available?
 
-      @mihomo_client.reload_config(@profile_manager.active_config_path)
-      @mihomo_client.refresh_provider('need-proxy') if File.exist?(@store.provider_path)
+      applied = @mihomo_client.reload_config(@profile_manager.active_config_path, inline_rules: @store.list.map(&:provider_line))
+      @mihomo_client.refresh_provider('need-proxy') if File.exist?(@store.provider_path) && !(applied.is_a?(Hash) && applied['inlineProvider'])
     rescue Error, SystemCallError
       nil
     end

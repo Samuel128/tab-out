@@ -28,7 +28,11 @@ let openTabs = [];
 const tr = TabOutI18n.t;
 const countText = TabOutI18n.count;
 const proxyController = TabOutProxyRouting.createController(
-  (command, payload) => TabOutProxyRouting.sendRequest(chrome, command, payload)
+  async (command, payload) => {
+    const data = await TabOutProxyRouting.sendRequest(chrome, command, payload);
+    if (['status', 'add', 'remove'].includes(command)) await TabOutBrowserRoutingUI.refresh();
+    return data;
+  }
 );
 const confirmProxyQuickAdd = TabOutProxyRouting.createQuickAddDialog({
   dialog: document.getElementById('proxyQuickAddDialog'),
@@ -1642,6 +1646,7 @@ async function setDashboardLanguage(value, persist = false) {
   TabOutI18n.apply();
   updateProxyPreview();
   renderProxyRouting(proxyController.state());
+  await TabOutBrowserRoutingUI.render();
   await renderDashboard();
   if (persist) await chrome.storage.local.set({ language: TabOutI18n.getLanguage() });
 }
